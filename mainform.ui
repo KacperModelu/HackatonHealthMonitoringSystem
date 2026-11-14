@@ -144,17 +144,10 @@
    <widget class="QLabel" name="label_5">
     <property name="geometry">
      <rect>
-<<<<<<< Updated upstream
-      <x>300</x>
-      <y>0</y>
-      <width>211</width>
-      <height>61</height>
-=======
       <x>280</x>
       <y>10</y>
-      <width>201</width>
+      <width>251</width>
       <height>51</height>
->>>>>>> Stashed changes
      </rect>
     </property>
     <property name="font">
@@ -163,8 +156,7 @@
      </font>
     </property>
     <property name="text">
-<<<<<<< Updated upstream
-     <string>Health Monitor</string>
+     <string>Health Monitor System</string>
     </property>
    </widget>
    <widget class="QPushButton" name="pushButton">
@@ -172,8 +164,8 @@
      <rect>
       <x>350</x>
       <y>240</y>
-      <width>91</width>
-      <height>24</height>
+      <width>111</width>
+      <height>31</height>
      </rect>
     </property>
     <property name="font">
@@ -182,10 +174,7 @@
      </font>
     </property>
     <property name="text">
-     <string>Create user </string>
-=======
-     <string>Health Monitor System</string>
->>>>>>> Stashed changes
+     <string>Create user</string>
     </property>
    </widget>
   </widget>

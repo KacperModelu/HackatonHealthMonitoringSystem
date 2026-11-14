@@ -2,6 +2,8 @@
 #include "mainform.h"
 #include "ui_login.h"
 #include <QDebug>
+#include <QScreen>
+#include <QGuiApplication>
 
 Login::Login(QWidget *parent)
     : QDialog(parent)
@@ -12,6 +14,11 @@ Login::Login(QWidget *parent)
     ui->comboBox->addItem("Jan Kowalski");
     ui->comboBox->addItem("Anna Nowak");
     ui->comboBox->addItem("Piotr Wiśniewski");
+
+    // Wyśrodkowanie okna Login na ekranie
+    QRect screenGeometry = QGuiApplication::primaryScreen()->availableGeometry();
+    move((screenGeometry.width() - width()) / 2,
+         (screenGeometry.height() - height()) / 2);
 }
 
 Login::~Login()

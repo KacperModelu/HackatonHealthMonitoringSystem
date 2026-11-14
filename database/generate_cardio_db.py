@@ -201,6 +201,143 @@ REFERENCE_RANGES = [
 
 
 # ---------------------------------------------------------------------------
+# Part 3: gamification tasks and plain-language guide
+# ---------------------------------------------------------------------------
+
+# code, title, description, why, category, points
+HEALTH_TASKS = [
+    ("morning_vitals", "Morning vitals check",
+     "Right after waking, before coffee or exercise: blood pressure, heart rate, SpO2.",
+     "Measuring at the same time each day makes trends easy to spot.", "measure", 10),
+    ("evening_vitals", "Evening vitals check",
+     "Before sleep, sit still for 5 minutes and repeat the measurements.",
+     "A second daily reading shows how your body handled the day.", "measure", 5),
+    ("aerobic", "Aerobic session (CEVIS / treadmill)",
+     "30+ minutes of cycling or running at the intensity in your exercise prescription.",
+     "Keeps your heart and VO2peak from declining in microgravity.", "exercise", 20),
+    ("resistance", "Resistance training (ARED)",
+     "Complete today's resistance exercise protocol.",
+     "Protects muscles and bones, which also supports blood circulation.", "exercise", 20),
+    ("hydration", "Drink 2 litres of water",
+     "Spread it over the day; log it in your hydration tracker.",
+     "Fluids shift toward your head in space; drinking enough supports blood volume.",
+     "recovery", 5),
+    ("sleep", "Sleep 8 hours",
+     "Keep a regular sleep window and dim the lights an hour before.",
+     "Poor sleep raises resting heart rate and blood pressure.", "recovery", 10),
+    ("wellbeing", "How do you feel?",
+     "Log your mood, energy and any symptoms (headache, dizziness, palpitations).",
+     "Symptoms you notice early help the flight surgeon act early.", "recovery", 5),
+    ("learn", "Read one guide topic",
+     "Open the Guide tab and read about one health indicator.",
+     "Knowing what is normal for you helps you spot changes yourself.", "learn", 5),
+]
+
+# topic, title, order, what, how (steps | separated), why in space, when to act, requirement
+GUIDE = [
+    ("colors", "Reading the colours", 0,
+     "Every value in this app is coloured by how it compares with the normal range. "
+     "Green means within the normal range. Amber means outside the normal range but not "
+     "dangerous: worth a second look. Red means far outside the normal range.",
+     "Green: carry on.|Amber: re-measure in a few minutes, sitting still. If it stays amber, "
+     "watch the trend over the next days.|Red: re-measure now. If it is still red, contact "
+     "the flight surgeon.",
+     "One unusual reading is often caused by movement, talking, or a loose sensor. "
+     "A trend over several days tells more than a single number.",
+     "Contact the flight surgeon for any red value that repeats, or for amber values "
+     "together with symptoms. This app does not replace medical advice.", None),
+    ("systolic_mmhg", "Blood pressure", 1,
+     "The pressure of blood on your artery walls, written as two numbers: systolic (when the "
+     "heart beats) over diastolic (when it relaxes), e.g. 118/76 mmHg.",
+     "Sit or stay restrained and relaxed for 5 minutes.|Put the cuff on your bare upper arm, at "
+     "heart level.|Do not talk or move during the measurement.|Take two readings one minute "
+     "apart and record both.",
+     "In microgravity body fluids shift toward the head, and blood pressure is often slightly "
+     "lower in flight. After landing, standing up can make you dizzy because the circulation "
+     "has to re-adapt to gravity.",
+     "Systolic above 130 or diastolic above 85 on several days: mention it at your next "
+     "medical conference. Above 160/100, or below 90 systolic with dizziness: contact the "
+     "flight surgeon.", None),
+    ("heart_rate_bpm", "Resting heart rate", 2,
+     "How many times your heart beats per minute while you are at rest.",
+     "Measure right after waking, before coffee or exercise.|Stay still for one minute.|Read "
+     "the value from the heart rate monitor or count your pulse for 60 seconds.",
+     "Resting heart rate often drops slightly in flight. A resting rate that climbs over "
+     "several days can point to poor sleep, stress, illness or loss of fitness.",
+     "Resting rate above 100 or below 40 with symptoms, or a feeling of skipped or irregular "
+     "beats: contact the flight surgeon.", None),
+    ("resp_rate_bpm", "Respiratory rate", 3,
+     "How many breaths you take per minute at rest.",
+     "Sit relaxed and breathe normally.|Count each time your chest rises for 60 seconds, or "
+     "read the value from the wearable sensor.",
+     "Raised carbon dioxide (CO2) in the cabin can make you breathe faster and cause "
+     "headaches. If several crew members breathe faster at the same time, suspect the air, "
+     "not your body.",
+     "Above 20 breaths per minute at rest for more than a day, or shortness of breath: report "
+     "it, and ask the ground to check cabin CO2.", None),
+    ("skin_temp_c", "Skin temperature", 4,
+     "The temperature measured by the sensor on your skin. It is lower than core body "
+     "temperature (about 37 °C) and normally lies between 32.5 and 35.5 °C.",
+     "Keep the sensor in firm contact with the skin.|Avoid measuring right after exercise or "
+     "a hygiene session.",
+     "Your immune system changes in space, so infections can appear more easily. A rise "
+     "together with a higher heart rate is an early sign of fever.",
+     "More than 1 °C above your usual value and you feel unwell: tell the flight surgeon.",
+     None),
+    ("spo2_pct", "Blood oxygen (SpO2)", 5,
+     "The percentage of your red blood cells that carry oxygen. Healthy values are 95–100 %.",
+     "Warm your hand first.|Put the pulse oximeter on a fingertip and keep still for 30 "
+     "seconds.|Read the value once the number stops changing.",
+     "The station air normally has the same oxygen pressure as on Earth at sea level. A drop "
+     "can mean a problem with the cabin air, a respiratory illness, or just cold fingers.",
+     "Below 95 %: re-measure on a warm finger. Below 92 %, or with shortness of breath: "
+     "contact the flight surgeon immediately.", None),
+    ("vo2peak", "Aerobic fitness (VO2peak)", 6,
+     "The most oxygen your body can use during maximal exercise, in ml per kg per minute. "
+     "It is the best single measure of heart and lung fitness.",
+     "Measured during the cycle ergometer test: 3 minutes of seated rest, then the load rises "
+     "every minute until you cannot continue.|Heart rate, ECG, blood pressure and breathing "
+     "gases are recorded throughout.",
+     "Without gravity the heart and muscles work less and lose fitness. VO2peak usually drops "
+     "most in the first weeks of flight; regular hard exercise limits the loss.",
+     "A drop of more than 15 % from your preflight value: discuss your exercise prescription "
+     "with the exercise physiologist.", 2),
+    ("ecg", "Resting ECG", 7,
+     "An electrocardiogram records the heart's electrical activity using 10 electrodes "
+     "(12 leads). It shows heart rhythm and how signals travel through the heart.",
+     "Lie on your back for 15 minutes while the tracing is recorded.|Electrodes go on the "
+     "chest and limbs; the skin is prepared first.",
+     "Done before and after long flights to compare the heart's rhythm and conduction.",
+     "Palpitations, fainting or chest pain at any time: contact the flight surgeon "
+     "immediately.", 1),
+]
+
+
+def add_gamification(db, crew_ids_by_mission, today):
+    """Synthetic task history: completions during and after each mission."""
+    g = random.Random(4242)          # separate RNG keeps the rest of the data unchanged
+    task_ids = {code: i for i, (code, *_rest) in enumerate(HEALTH_TASKS, start=1)}
+    # How likely each task is done on a given day, for an average crew member.
+    base_p = {"morning_vitals": 0.92, "evening_vitals": 0.7, "aerobic": 0.8,
+              "resistance": 0.75, "hydration": 0.65, "sleep": 0.55, "wellbeing": 0.6,
+              "learn": 0.15}
+    rows = []
+    for (launch, _ret), crew_ids in crew_ids_by_mission.items():
+        for cid in crew_ids:
+            diligence = g.uniform(0.75, 1.1)
+            day = launch
+            while day < today:
+                # Fewer tasks done on the ground after the mission
+                factor = diligence if day <= _ret else diligence * 0.8
+                for code, p in base_p.items():
+                    if g.random() < min(p * factor, 0.98):
+                        rows.append((cid, task_ids[code], day.isoformat()))
+                day += timedelta(days=1)
+    db.executemany("INSERT INTO task_completion (crew_id, task_id, completed_on) VALUES (?,?,?)",
+                   rows)
+
+
+# ---------------------------------------------------------------------------
 # Part 2: synthetic crew data
 # ---------------------------------------------------------------------------
 
@@ -481,6 +618,10 @@ def build(path):
     db.executemany("INSERT INTO equipment (requirement_id, setting, name, kind) "
                    "VALUES (?,?,?,?)", EQUIPMENT)
     db.executemany("INSERT INTO reference_range VALUES (?,?,?,?,?,?,?)", REFERENCE_RANGES)
+    db.executemany("INSERT INTO health_task (code, title, description, why, category, points, "
+                   "sort_order) VALUES (?,?,?,?,?,?,?)",
+                   [t + (i,) for i, t in enumerate(HEALTH_TASKS)])
+    db.executemany("INSERT INTO indicator_guide VALUES (?,?,?,?,?,?,?,?)", GUIDE)
 
     b = Builder(db)
     b.add_crew()
@@ -579,6 +720,12 @@ def build(path):
             if d <= TODAY:
                 b.cycle_test(cid, None, 7, d, "upright", "JSC", "Parvo Medics TrueOne 2400",
                              vo2_factor=1 + (year - 2024) * 0.01)
+
+    crew_by_mission = {
+        (date.fromisoformat(l), date.fromisoformat(r)): [i * 3 + k + 1 for k in range(3)]
+        for i, (_m, _n, l, r) in enumerate(MISSIONS)
+    }
+    add_gamification(db, crew_by_mission, TODAY)
 
     db.commit()
     return db

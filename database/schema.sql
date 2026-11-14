@@ -211,6 +211,45 @@ CREATE TABLE vitals_reading (
     spo2_pct        REAL NOT NULL
 );
 
+------------------------------------------------------------------------------
+-- Part 3: gamification and plain-language guide
+------------------------------------------------------------------------------
+
+-- Health-supporting tasks the crew member can tick off each day.
+CREATE TABLE health_task (
+    id             INTEGER PRIMARY KEY,
+    code           TEXT NOT NULL UNIQUE,
+    title          TEXT NOT NULL,
+    description    TEXT NOT NULL,         -- what to do
+    why            TEXT NOT NULL,         -- why it helps (shown to the astronaut)
+    category       TEXT NOT NULL CHECK (category IN ('measure','exercise','recovery','learn')),
+    points         INTEGER NOT NULL CHECK (points > 0),
+    sort_order     INTEGER NOT NULL
+);
+
+CREATE TABLE task_completion (
+    id             INTEGER PRIMARY KEY,
+    crew_id        INTEGER NOT NULL REFERENCES crew_member(id),
+    task_id        INTEGER NOT NULL REFERENCES health_task(id),
+    completed_on   TEXT NOT NULL,          -- ISO date
+    created_in_app INTEGER NOT NULL DEFAULT 0 CHECK (created_in_app IN (0,1)),
+    UNIQUE (crew_id, task_id, completed_on)
+);
+
+CREATE INDEX idx_completion_crew ON task_completion(crew_id, completed_on);
+
+-- Plain-language explanations for each health indicator and test.
+CREATE TABLE indicator_guide (
+    topic          TEXT PRIMARY KEY,       -- matches reference_range.parameter where applicable
+    title          TEXT NOT NULL,
+    sort_order     INTEGER NOT NULL,
+    what_it_is     TEXT NOT NULL,
+    how_to_measure TEXT NOT NULL,          -- steps separated by '|'
+    why_in_space   TEXT NOT NULL,
+    when_to_act    TEXT NOT NULL,
+    requirement_id INTEGER REFERENCES medical_requirement(id)
+);
+
 CREATE INDEX idx_session_crew      ON test_session(crew_id, session_date);
 CREATE INDEX idx_vitals_crew_time  ON vitals_reading(crew_id, measured_at);
 

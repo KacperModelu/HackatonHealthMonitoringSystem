@@ -6,35 +6,126 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>600</height>
+    <width>1180</width>
+    <height>820</height>
    </rect>
   </property>
+  <property name="minimumSize">
+   <size>
+    <width>900</width>
+    <height>640</height>
+   </size>
+  </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>Astronaut Health Monitor</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QWidget" name="gridLayoutWidget">
-    <property name="geometry">
-     <rect>
-      <x>-1</x>
-      <y>-21</y>
-      <width>801</width>
-      <height>561</height>
-     </rect>
+   <layout class="QVBoxLayout" name="rootLayout">
+    <property name="spacing">
+     <number>14</number>
     </property>
-    <layout class="QGridLayout" name="gridLayout"/>
-   </widget>
-  </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>800</width>
-     <height>33</height>
-    </rect>
-   </property>
+    <property name="leftMargin">
+     <number>24</number>
+    </property>
+    <property name="topMargin">
+     <number>18</number>
+    </property>
+    <property name="rightMargin">
+     <number>24</number>
+    </property>
+    <property name="bottomMargin">
+     <number>12</number>
+    </property>
+    <item>
+     <layout class="QHBoxLayout" name="headerLayout">
+      <property name="spacing">
+       <number>12</number>
+      </property>
+      <item>
+       <layout class="QVBoxLayout" name="identityLayout">
+        <property name="spacing">
+         <number>2</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="nameLabel">
+          <property name="text">
+           <string>Crew member</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="missionLabel">
+          <property name="text">
+           <string>Mission</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <spacer name="headerSpacer">
+        <property name="orientation">
+         <enum>Qt::Orientation::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QLabel" name="pointsLabel">
+        <property name="text">
+         <string>0 pts</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="summaryLabel">
+        <property name="text">
+         <string>Status</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <widget class="QTabWidget" name="tabWidget">
+      <property name="currentIndex">
+       <number>0</number>
+      </property>
+      <property name="documentMode">
+       <bool>true</bool>
+      </property>
+      <widget class="QWidget" name="overviewTab">
+       <attribute name="title">
+        <string>Overview</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="overviewLayout"/>
+      </widget>
+      <widget class="QWidget" name="trendsTab">
+       <attribute name="title">
+        <string>Trends</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="trendsLayout"/>
+      </widget>
+      <widget class="QWidget" name="tasksTab">
+       <attribute name="title">
+        <string>Health tasks</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="tasksLayout"/>
+      </widget>
+      <widget class="QWidget" name="guideTab">
+       <attribute name="title">
+        <string>Guide</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="guideLayout"/>
+      </widget>
+     </widget>
+    </item>
+   </layout>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>

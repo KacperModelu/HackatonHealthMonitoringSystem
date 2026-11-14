@@ -2,26 +2,45 @@ import { useState } from 'react';
 import { api } from '../api.js';
 import { go } from '../router.js';
 
-const EMPTY = { firstName: '', lastName: '', age: '', sex: 'M', heightCm: '', weightKg: '' };
+const EMPTY = { firstName: '', lastName: '', age: '', sex: '', heightCm: '', weightKg: '' };
+const LABELS = {
+  firstName: 'name', lastName: 'surname', age: 'age', sex: 'biological sex', heightCm: 'height', weightKg: 'weight',
+};
 
 // New user form. "Generate user data" creates the person and a
-// full fake health record with 0–3 random deviations from the norm.
+// full fake health record with 0–3 random deviations from the norm
 export default function UserForm() {
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [invalid, setInvalid] = useState([]);   // fields to highlight
   const [result, setResult] = useState(null);
 
-  const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
+  const set = (key) => (e) => {
+    setForm({ ...form, [key]: e.target.value });
+    setInvalid(invalid.filter((k) => k !== key));
+  };
+  // Props shared by all required inputs
+  const req = (key) => ({ value: form[key], onChange: set(key), required: true, 'aria-invalid': invalid.includes(key) });
 
   const submit = async (e) => {
     e.preventDefault();
+
+    
+    // All fields are required (the server checks this too).
+    const missing = Object.keys(LABELS).filter((k) => !form[k].trim());
+    if (missing.length) {
+      setInvalid(missing);
+      setError(`Please fill in: ${missing.map((k) => LABELS[k]).join(', ')}.`);
+      return;
+    }
     setError('');
     setBusy(true);
     try {
       setResult(await api.createCrew(form));
     } catch (err) {
       setError(err.message);
+      setInvalid(err.fields ?? []);
     } finally {
       setBusy(false);
     }
@@ -37,7 +56,7 @@ export default function UserForm() {
             mission {result.mission}):
           </p>
           <ul className="facts">
-            <li><strong>{result.vitalsReadings}</strong> vitals readings (twice a day in flight)</li>
+            <li><strong>{result.vitalsReadings}</strong> vitals readings (twice a day during a flight)</li>
             <li><strong>{result.cycleTests}</strong> cycle ergometer tests</li>
             <li><strong>{result.ecgs}</strong> resting ECGs</li>
           </ul>
@@ -72,34 +91,36 @@ export default function UserForm() {
           <span className="brand-mark" aria-hidden="true">✦</span>
           <h1>Health Monitor System</h1>
         </div>
+        <p className="muted small">All fields are required.</p>
 
         <div className="grid2">
           <label className="field">
             <span>Name</span>
-            <input value={form.firstName} onChange={set('firstName')} autoFocus autoComplete="off" />
+            <input {...req('firstName')} autoFocus autoComplete="off" />
           </label>
           <label className="field">
             <span>Surname</span>
-            <input value={form.lastName} onChange={set('lastName')} autoComplete="off" />
+            <input {...req('lastName')} autoComplete="off" />
           </label>
           <label className="field">
             <span>Age</span>
-            <input value={form.age} onChange={set('age')} inputMode="numeric" placeholder="18–99" />
+            <input {...req('age')} inputMode="numeric" placeholder="18–99" />
           </label>
           <label className="field">
             <span>Biological sex</span>
-            <select value={form.sex} onChange={set('sex')}>
+            <select {...req('sex')}>
+              <option value="" disabled>Choose…</option>
               <option value="M">Man</option>
               <option value="F">Woman</option>
             </select>
           </label>
           <label className="field">
-            <span>Height <em className="muted">(cm, optional)</em></span>
-            <input value={form.heightCm} onChange={set('heightCm')} inputMode="decimal" placeholder="random" />
+            <span>Height <em className="muted">(cm)</em></span>
+            <input {...req('heightCm')} inputMode="decimal" placeholder="120–230" />
           </label>
           <label className="field">
-            <span>Weight <em className="muted">(kg, optional)</em></span>
-            <input value={form.weightKg} onChange={set('weightKg')} inputMode="decimal" placeholder="random" />
+            <span>Weight <em className="muted">(kg)</em></span>
+            <input {...req('weightKg')} inputMode="decimal" placeholder="35–200" />
           </label>
         </div>
 

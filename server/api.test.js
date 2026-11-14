@@ -44,12 +44,19 @@ const call = async (method, url, body) => {
 test('form validation rejects bad input', async () => {
   assert.equal((await call('POST', '/crew', { firstName: '', lastName: 'X', age: 30 })).status, 400);
   assert.equal((await call('POST', '/crew', { firstName: 'A', lastName: 'B', age: 12 })).status, 400);
-  assert.equal((await call('POST', '/crew', { firstName: 'A', lastName: 'B', age: 30, heightCm: '300' })).status, 400);
+  const full = { firstName: 'A', lastName: 'B', age: '30', sex: 'M', heightCm: '180', weightKg: '80' };
+  assert.equal((await call('POST', '/crew', { ...full, heightCm: '300' })).status, 400);
+  // Every field is required, and the response names the missing ones
+  const missing = await call('POST', '/crew', { firstName: 'A', lastName: 'B', age: '30' });
+  assert.equal(missing.status, 400);
+  assert.deepEqual(missing.body.fields, ['sex', 'heightCm', 'weightKg']);
+  assert.equal((await call('POST', '/crew', { ...full, sex: 'X' })).status, 400);
+  assert.equal((await call('POST', '/crew', { ...full, weightKg: '  ' })).status, 400);
 });
 
 test('generate, read dashboard, tick a task, delete', async () => {
   const created = await call('POST', '/crew', {
-    firstName: 'Test', lastName: 'Pilot', age: '41', sex: 'F', heightCm: '', weightKg: '58,5',
+    firstName: 'Test', lastName: 'Pilot', age: '41', sex: 'F', heightCm: '165', weightKg: '58,5',
   });
   assert.equal(created.status, 201);
   const r = created.body;
@@ -65,6 +72,7 @@ test('generate, read dashboard, tick a task, delete', async () => {
   assert.equal(dash.vitals.length, r.vitalsReadings);
   assert.equal(dash.tests.length, r.cycleTests);
   assert.equal(dash.crew.weightKg, 58.5);
+  assert.equal(dash.crew.heightCm, 165);
   assert.equal(dash.crew.protocol, 'light');
   assert.equal(dash.events.length, r.events.length);
   assert.equal(dash.tests.find((t) => t.label === 'L-90/30 d' && t.position === 'upright').pct_vs_preflight, 0);
@@ -129,7 +137,9 @@ test('generated data is varied and deviations show up as alerts', () => {
 });
 
 test('psychological questionnaire, journal and cognitive results', async () => {
-  const { crewId } = (await call('POST', '/crew', { firstName: 'Psy', lastName: 'Test', age: 30 })).body;
+  const { crewId } = (await call('POST', '/crew', {
+    firstName: 'Psy', lastName: 'Test', age: 30, sex: 'M', heightCm: 180, weightKg: 75,
+  })).body;
 
   // Missing answer / out-of-range slider are rejected
   assert.equal((await call('POST', `/crew/${crewId}/psych`, { answers: [5, 5] })).status, 400);
@@ -168,10 +178,11 @@ test('psychological questionnaire, journal and cognitive results', async () => {
   assert.equal(cog[1].max_correct, 10);
 
   // Deleting the user removes the assessments too
+  const answersBefore = db.prepare('SELECT COUNT(*) n FROM psych_answer').get().n;
   assert.equal((await call('DELETE', `/crew/${crewId}`)).status, 204);
   for (const t of ['psych_assessment', 'journal_entry', 'cognitive_result']) {
     assert.equal(db.prepare(`SELECT COUNT(*) n FROM ${t} WHERE crew_id = ?`).get(crewId).n, 0, t);
   }
-  assert.equal(db.prepare('SELECT COUNT(*) n FROM psych_answer').get().n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM psych_answer').get().n, answersBefore - 20);   // 2 × 10 answers
   assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
 });

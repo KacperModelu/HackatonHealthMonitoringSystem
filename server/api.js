@@ -22,6 +22,7 @@ export function createApi(db) {
   // --- crew list (login screen) --------------------------------------------------
   api.get('/crew', (_req, res) => {
     const rows = db.prepare(
+      // db query ask
       `SELECT c.id, c.first_name, c.last_name, c.sex, c.birth_date, c.created_in_app,
               (SELECT m.name FROM crew_assignment a JOIN mission m ON m.id = a.mission_id
                WHERE a.crew_id = c.id ORDER BY m.launch_date DESC LIMIT 1) AS mission
@@ -39,8 +40,8 @@ export function createApi(db) {
 
   // --- "Generate user data" ------------------------------------------------------
   api.post('/crew', (req, res) => {
-    const { person, error } = validatePerson(req.body);
-    if (error) return res.status(400).json({ error });
+    const { person, error, fields } = validatePerson(req.body);
+    if (error) return res.status(400).json({ error, fields });
     try {
       res.status(201).json(generate(db, person));
     } catch (err) {

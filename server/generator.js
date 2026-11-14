@@ -474,31 +474,37 @@ class Generator {
   }
 }
 
-// Checks the form input; returns { person } or { error }.
+const text = (v) => String(v ?? '').trim();
+const FIELD_LABELS = {
+  firstName: 'name', lastName: 'surname', age: 'age', sex: 'biological sex', heightCm: 'height', weightKg: 'weight',
+};
+
+// Checks the form input; every field is required. Returns { person } or { error, fields }.
 export function validatePerson(body = {}) {
-  const firstName = String(body.firstName ?? '').trim();
-  const lastName = String(body.lastName ?? '').trim();
-  if (!firstName || !lastName) return { error: 'Please enter name and surname.' };
-
-  const age = Number(String(body.age ?? '').trim());
-  if (!Number.isInteger(age) || age < 18 || age > 99) {
-    return { error: 'Age must be a number between 18 and 99.' };
+  const missing = Object.keys(FIELD_LABELS).filter((k) => !text(body[k]));
+  if (missing.length) {
+    return { error: `Please fill in: ${missing.map((k) => FIELD_LABELS[k]).join(', ')}.`, fields: missing };
   }
-  const sex = body.sex === 'F' ? 'F' : 'M';
 
-  // Height and weight are optional (empty = random plausible value).
-  const optional = (value, min, max) => {
-    const t = String(value ?? '').trim().replace(',', '.');
-    if (!t) return { value: null };
-    const v = Number(t);
-    return Number.isFinite(v) && v >= min && v <= max ? { value: v } : { bad: true };
+  const age = Number(text(body.age));
+  if (!Number.isInteger(age) || age < 18 || age > 99) {
+    return { error: 'Age must be a number between 18 and 99.', fields: ['age'] };
+  }
+  if (body.sex !== 'M' && body.sex !== 'F') {
+    return { error: 'Please choose biological sex.', fields: ['sex'] };
+  }
+  const number = (value, min, max) => {
+    const v = Number(text(value).replace(',', '.'));
+    return Number.isFinite(v) && v >= min && v <= max ? v : null;
   };
-  const height = optional(body.heightCm, 120, 230);
-  if (height.bad) return { error: 'Height must be in cm (120–230).' };
-  const weight = optional(body.weightKg, 35, 200);
-  if (weight.bad) return { error: 'Weight must be in kg (35–200).' };
+  const heightCm = number(body.heightCm, 120, 230);
+  if (heightCm === null) return { error: 'Height must be in cm (120–230).', fields: ['heightCm'] };
+  const weightKg = number(body.weightKg, 35, 200);
+  if (weightKg === null) return { error: 'Weight must be in kg (35–200).', fields: ['weightKg'] };
 
-  return { person: { firstName, lastName, age, sex, heightCm: height.value, weightKg: weight.value } };
+  return {
+    person: { firstName: text(body.firstName), lastName: text(body.lastName), age, sex: body.sex, heightCm, weightKg },
+  };
 }
 
 // Runs in a single transaction: either everything is stored or nothing.

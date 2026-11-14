@@ -22,7 +22,8 @@ signals:
 
 private slots:
     void on_pushButton_clicked();
+
 private:
     Ui::mainform *ui;
 };
-#endif
+#endif // MAINFORM_H

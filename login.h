@@ -1,8 +1,6 @@
 #ifndef LOGIN_H
 #define LOGIN_H
 
-#include <QJsonArray>
-#include <QJsonObject>
 #include <QDialog>
 
 namespace Ui {
@@ -18,12 +16,8 @@ public:
     ~Login();
 private slots:
     void on_pushButton_2_clicked();
-    void on_pushButton_3_clicked(); // <-- upewnij się, że to jest w login.h
 private:
     Ui::Login *ui;
-    QJsonArray usersArray; // trzyma wszystkich użytkowników (imię, wiek, płeć)
-    void loadUsers();
-    void saveUsers();
 };
 
 #endif // LOGIN_H

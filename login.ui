@@ -13,13 +13,13 @@
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
-  <widget class="QWidget" name="">
+  <widget class="QWidget" name="layoutWidget">
    <property name="geometry">
     <rect>
      <x>280</x>
      <y>180</y>
-     <width>129</width>
-     <height>122</height>
+     <width>181</width>
+     <height>154</height>
     </rect>
    </property>
    <layout class="QVBoxLayout" name="verticalLayout">
@@ -54,6 +54,13 @@
      <widget class="QPushButton" name="pushButton">
       <property name="text">
        <string>Log in</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="pushButton_2">
+      <property name="text">
+       <string>Add user</string>
       </property>
      </widget>
     </item>

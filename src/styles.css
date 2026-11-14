@@ -118,8 +118,8 @@ p.pill { margin: 0 0 0.5rem; padding: 0.35rem 0.7rem; border-radius: 8px; }
 /* --- dashboard --------------------------------------------------------- */
 .dashboard { max-width: 1200px; margin: 0 auto; padding: 1rem 16px 3rem; }
 .topbar { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
-.topbar select { width: auto; }
-.tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); overflow-x: auto; margin-bottom: 1rem; }
+.topbar select { width: auto; text-align: center;  }
+.tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); overflow-x: auto; margin-bottom: 1rem; justify-content: center; }
 .tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; white-space: nowrap; color: var(--muted); }
 .tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
 .tab:hover:not(:disabled):not(.active) { border-color: transparent; border-bottom-color: var(--border); color: var(--text); }
@@ -157,7 +157,7 @@ th { color: var(--muted); font-weight: 600; }
 td .pill { margin-left: 0; }
 
 /* --- tasks / gamification ------------------------------------------ */
-.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.8rem; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.8rem; }
 .stat { display: grid; gap: 0.35rem; align-content: start; }
 .stat-label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .stat-value { font-size: 1.4rem; font-weight: 700; }

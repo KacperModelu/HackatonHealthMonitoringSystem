@@ -6,6 +6,7 @@ statsscreen::statsscreen(QWidget *parent)
     , ui(new Ui::statsscreen)
 {
     ui->setupUi(this);
+    this->showMaximized();
 }
 
 statsscreen::~statsscreen()

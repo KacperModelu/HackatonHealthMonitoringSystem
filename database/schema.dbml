@@ -1,0 +1,316 @@
+Table medical_requirement {
+  id integer [primary key]
+  code text [not null, unique]
+  title text [not null]
+  sponsor text [not null]
+  discipline text
+  category text [not null]
+  purpose text [not null]
+  measurement_parameters text [not null]
+  deliverables text [not null]
+  min_flight_duration_days integer
+  crew_required text [not null]
+  revised_date text [not null]
+}
+
+Table schedule_point {
+  id integer [primary key]
+  requirement_id integer [not null]
+  phase text [not null]
+  activity text [not null]
+  label text [not null]
+  anchor text [not null]
+  offset_days_min integer
+  offset_days_max integer
+  flexibility_days integer
+  duration_min integer
+  personnel text
+  location text
+  notes text
+}
+
+Ref: schedule_point.requirement_id > medical_requirement.id
+
+Table protocol_stage {
+  protocol text [not null]
+  stage_no integer [not null]
+  stage_type text [not null]
+  watts integer [not null]
+  duration_sec integer [not null]
+  elapsed_end_sec integer
+
+  Indexes {
+    (protocol, stage_no) [pk]
+  }
+}
+
+Table termination_criterion {
+  id integer [primary key]
+  requirement_id integer [not null]
+  description text [not null]
+  is_clinical integer [not null]
+}
+
+Ref: termination_criterion.requirement_id > medical_requirement.id
+
+Table test_constraint {
+  id integer [primary key]
+  requirement_id integer [not null]
+  applies_to text [not null]
+  description text [not null]
+}
+
+Ref: test_constraint.requirement_id > medical_requirement.id
+
+Table equipment {
+  id integer [primary key]
+  requirement_id integer [not null]
+  setting text [not null]
+  name text [not null]
+  kind text [not null]
+}
+
+Ref: equipment.requirement_id > medical_requirement.id
+
+Table reference_range {
+  parameter text [primary key]
+  unit text [not null]
+  normal_low real
+  normal_high real
+  critical_low real
+  critical_high real
+  note text
+}
+
+Table crew_member {
+  id integer [primary key]
+  first_name text [not null]
+  last_name text [not null]
+  sex text [not null]
+  birth_date text [not null]
+  height_cm real
+  weight_kg real
+  agency text
+  cycle_protocol text
+  regular_cyclist integer [not null, default: 0]
+  created_in_app integer [not null, default: 0]
+}
+
+Table mission {
+  id integer [primary key]
+  name text [not null, unique]
+  launch_date text [not null]
+  return_date text [not null]
+}
+
+Table crew_assignment {
+  crew_id integer [not null]
+  mission_id integer [not null]
+  role text [not null]
+
+  Indexes {
+    (crew_id, mission_id) [pk]
+  }
+}
+
+Ref: crew_assignment.crew_id > crew_member.id
+Ref: crew_assignment.mission_id > mission.id
+
+Table test_session {
+  id integer [primary key]
+  crew_id integer [not null]
+  mission_id integer
+  schedule_point_id integer [not null]
+  session_date text [not null]
+  position text
+  location text [not null]
+  gas_analyzer text
+  status text [not null]
+  termination_id integer
+  maximal_effort integer
+  notes text
+}
+
+Ref: test_session.crew_id > crew_member.id
+Ref: test_session.mission_id > mission.id
+Ref: test_session.schedule_point_id > schedule_point.id
+Ref: test_session.termination_id > termination_criterion.id
+
+Table ecg_result {
+  session_id integer [primary key]
+  heart_rate_bpm integer [not null]
+  pr_ms integer [not null]
+  qrs_ms integer [not null]
+  qt_ms integer [not null]
+  qtc_ms integer [not null]
+  axis_deg integer [not null]
+  rhythm text [not null]
+  finding text [not null]
+  abnormal integer [not null]
+  cardiologist_report_date text
+}
+
+Ref: ecg_result.session_id > test_session.id
+
+Table cycle_test_result {
+  session_id integer [primary key]
+  protocol text [not null]
+  peak_watts integer [not null]
+  exercise_time_sec integer [not null]
+  vo2peak_l_min real
+  vo2peak_ml_kg_min real
+  vt_vo2_ml_kg_min real
+  vt_percent_vo2peak real
+  hr_rest_bpm integer [not null]
+  hr_peak_bpm integer [not null]
+  rer_peak real
+  rpe_peak integer
+  hr_recovery_1min integer
+}
+
+Ref: cycle_test_result.session_id > test_session.id
+
+Table stage_measurement {
+  session_id integer [not null]
+  stage_no integer [not null]
+  watts integer [not null]
+  heart_rate_bpm integer [not null]
+  vo2_ml_kg_min real
+  rpe integer
+
+  Indexes {
+    (session_id, stage_no) [pk]
+  }
+}
+
+Ref: stage_measurement.session_id > test_session.id
+
+Table bp_measurement {
+  session_id integer [not null]
+  seq integer [not null]
+  timepoint text [not null]
+  systolic_mmhg integer [not null]
+  diastolic_mmhg integer [not null]
+  heart_rate_bpm integer [not null]
+
+  Indexes {
+    (session_id, seq) [pk]
+  }
+}
+
+Ref: bp_measurement.session_id > test_session.id
+
+Table vitals_reading {
+  id integer [primary key]
+  crew_id integer [not null]
+  mission_id integer [not null]
+  measured_at text [not null]
+  flight_day integer [not null]
+  systolic_mmhg integer [not null]
+  diastolic_mmhg integer [not null]
+  heart_rate_bpm integer [not null]
+  resp_rate_bpm real [not null]
+  skin_temp_c real [not null]
+  spo2_pct real [not null]
+}
+
+Ref: vitals_reading.crew_id > crew_member.id
+Ref: vitals_reading.mission_id > mission.id
+
+Table health_task {
+  id integer [primary key]
+  code text [not null, unique]
+  title text [not null]
+  description text [not null]
+  why text [not null]
+  category text [not null]
+  points integer [not null]
+  sort_order integer [not null]
+}
+
+Table task_completion {
+  id integer [primary key]
+  crew_id integer [not null]
+  task_id integer [not null]
+  completed_on text [not null]
+  created_in_app integer [not null, default: 0]
+}
+
+Ref: task_completion.crew_id > crew_member.id
+Ref: task_completion.task_id > health_task.id
+
+Table indicator_guide {
+  topic text [primary key]
+  title text [not null]
+  sort_order integer [not null]
+  what_it_is text [not null]
+  how_to_measure text [not null]
+  why_in_space text [not null]
+  when_to_act text [not null]
+  requirement_id integer
+}
+
+Ref: indicator_guide.requirement_id > medical_requirement.id
+
+Table simulated_event {
+  id integer [primary key]
+  crew_id integer [not null]
+  mission_id integer
+  kind text [not null]
+  start_flight_day integer
+  end_flight_day integer
+  description text [not null]
+  source text [not null]
+}
+
+Ref: simulated_event.crew_id > crew_member.id
+Ref: simulated_event.mission_id > mission.id
+
+Table psych_assessment {
+  id integer [primary key]
+  crew_id integer [not null]
+  taken_at text [not null]
+  score integer [not null]
+  max_score integer [not null]
+  percent real [not null]
+}
+
+Ref: psych_assessment.crew_id > crew_member.id
+
+Table psych_answer {
+  assessment_id integer [not null]
+  question_no integer [not null]
+  question text [not null]
+  answer text [not null]
+  points integer [not null]
+
+  Indexes {
+    (assessment_id, question_no) [pk]
+  }
+}
+
+Ref: psych_answer.assessment_id > psych_assessment.id
+
+Table journal_entry {
+  id integer [primary key]
+  crew_id integer [not null]
+  written_at text [not null]
+  text text [not null]
+}
+
+Ref: journal_entry.crew_id > crew_member.id
+
+Table cognitive_result {
+  id integer [primary key]
+  crew_id integer [not null]
+  taken_at text [not null]
+  test text [not null]
+  correct integer
+  max_correct integer
+  avg_reaction_ms real
+  false_starts integer
+  duration_sec real
+  details text [not null]
+}
+
+Ref: cognitive_result.crew_id > crew_member.id

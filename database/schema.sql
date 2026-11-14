@@ -81,8 +81,8 @@ CREATE TABLE equipment (
     kind           TEXT NOT NULL CHECK (kind IN ('hardware','software'))
 );
 
--- Clinical reference ranges used to flag results. These are general adult
--- clinical values (NOT taken from the MRID documents); adjust as needed.
+-- Clinical reference ranges used to flag results. 
+-- These are general adult clinical values (NOT taken from the MRID documents); 
 CREATE TABLE reference_range (
     parameter     TEXT PRIMARY KEY,
     unit          TEXT NOT NULL,
@@ -94,7 +94,7 @@ CREATE TABLE reference_range (
 );
 
 ------------------------------------------------------------------------------
--- Part 2: synthetic crew data
+-- Part 2: pregenerated crew data
 ------------------------------------------------------------------------------
 
 CREATE TABLE crew_member (

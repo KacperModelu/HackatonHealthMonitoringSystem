@@ -110,6 +110,8 @@ class Generator {
     this.qrs = randint(84, 102);
     this.axis = randint(10, 75);
 
+
+    // Insert the crew member and mission assignment into the database
     this.crewId = this.insert(
       `INSERT INTO crew_member (first_name, last_name, sex, birth_date, height_cm, weight_kg,
          agency, cycle_protocol, regular_cyclist, created_in_app)
@@ -241,7 +243,7 @@ class Generator {
     }
   }
 
-  // --- in-flight vitals, twice a day -------------------------------------------
+  // --- in-flight vitals, collected twice a day -------------------------------------------
   vitals() {
     const { uni, randint, gauss } = this.r;
     const stmt = this.db.prepare(
@@ -321,7 +323,7 @@ class Generator {
     return rows;
   }
 
-  // --- cycle ergometer tests (N3.07) ---------------------------------------------
+  // --- cycle ergometer tests (N3.07)  - testy wysiłkowe na rowerze---------------------------------------------
   cycleTests() {
     const { randint } = this.r;
     const parvo = 'Parvo Medics TrueOne 2400';

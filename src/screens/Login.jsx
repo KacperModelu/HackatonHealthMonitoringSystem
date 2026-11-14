@@ -55,7 +55,7 @@ export default function Login({ selected }) {
           <select value={current} onChange={(e) => setCurrent(e.target.value)} disabled={!crew?.length}>
             {crew && !crew.length && <option value="">No astronauts yet</option>}
             {added.length > 0 && <optgroup label="Added in the app">{added.map(option)}</optgroup>}
-            {reference.length > 0 && <optgroup label="Reference crew">{reference.map(option)}</optgroup>}
+            {reference.length > 0 && <optgroup label="Preloaded NASA data">{reference.map(option)}</optgroup>}
           </select>
         </label>
         {person && (
@@ -75,7 +75,7 @@ export default function Login({ selected }) {
           <button
             className="danger"
             disabled={!person?.createdInApp}
-            title={person && !person.createdInApp ? 'Only users added in the app can be deleted' : undefined}
+            title={person && !person.createdInApp ? 'Only original users can be removed' : undefined}
             onClick={remove}
           >
             Delete user

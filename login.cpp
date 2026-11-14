@@ -1,4 +1,5 @@
 #include "login.h"
+#include "cardiodb.h"
 #include "mainform.h"
 #include "ui_login.h"
 #include <QDebug>
@@ -8,10 +9,15 @@ Login::Login(QWidget *parent)
     , ui(new Ui::Login)
 {
     ui->setupUi(this);
+    reloadCrew();
+}
 
-    ui->comboBox->addItem("Jan Kowalski");
-    ui->comboBox->addItem("Anna Nowak");
-    ui->comboBox->addItem("Piotr Wiśniewski");
+// Lista członków załogi z bazy danych (id zapisane w itemData).
+void Login::reloadCrew()
+{
+    ui->comboBox->clear();
+    for (const auto &crew : CardioDb::crewMembers())
+        ui->comboBox->addItem(crew.fullName, crew.id);
 }
 
 Login::~Login()
@@ -29,7 +35,7 @@ void Login::on_pushButton_2_clicked()
 
     connect(addForm, &mainform::userAdded, this, [this, created](const QString &fullName, const QString &age, const QString &sex) {
         *created = true;
-        ui->comboBox->addItem(fullName);
+        reloadCrew();   // mainform zapisał już użytkownika w bazie
         ui->comboBox->setCurrentText(fullName);
         this->show();
     });

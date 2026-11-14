@@ -20,4 +20,9 @@ export const api = {
   tasks: (id) => request('GET', `/crew/${id}/tasks`),
   setTask: (id, taskId, done) => request('POST', `/crew/${id}/tasks/${taskId}`, { done }),
   guide: () => request('GET', '/guide'),
+  wellbeing: (id) => request('GET', `/crew/${id}/wellbeing`),
+  submitPsych: (id, answers) => request('POST', `/crew/${id}/psych`, { answers }),
+  saveJournal: (id, text) => request('POST', `/crew/${id}/journal`, { text }),
+  cognitive: (id) => request('GET', `/crew/${id}/cognitive`),
+  saveCognitive: (id, result) => request('POST', `/crew/${id}/cognitive`, result),
 };

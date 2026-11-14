@@ -127,3 +127,51 @@ test('generated data is varied and deviations show up as alerts', () => {
   assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
   assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
 });
+
+test('psychological questionnaire, journal and cognitive results', async () => {
+  const { crewId } = (await call('POST', '/crew', { firstName: 'Psy', lastName: 'Test', age: 30 })).body;
+
+  // Missing answer / out-of-range slider are rejected
+  assert.equal((await call('POST', `/crew/${crewId}/psych`, { answers: [5, 5] })).status, 400);
+  assert.equal((await call('POST', `/crew/${crewId}/psych`, { answers: [11, 5, 5, 5, 2, 5, 0, 0, 0, 5] })).status, 400);
+
+  // Best answers: low stress/loneliness/tiredness, good sleep, 6-8 h, coping, happy, connected, practice, no stressor
+  const best = await call('POST', `/crew/${crewId}/psych`, { answers: [0, 0, 0, 10, 2, 10, 1, 0, 0, 5] });
+  assert.equal(best.status, 201);
+  assert.equal(best.body.score, 99);              // practice question gives 9 at best
+  assert.equal(best.body.belowThreshold, false);
+
+  // Worst answers → below the 60 % threshold
+  const worst = (await call('POST', `/crew/${crewId}/psych`, { answers: [10, 10, 10, 0, 0, 0, 6, 3, 5, 2] })).body;
+  assert.equal(worst.score, 0 + 0 + 0 + 0 + 0 + 0 + 1 + 2 + 3 + 1);
+  assert.equal(worst.belowThreshold, true);
+
+  // Completing the questionnaire ticks the daily "How do you feel?" task
+  const tasks = (await call('GET', `/crew/${crewId}/tasks`)).body;
+  const wellbeing = tasks.tasks.find((t) => t.code === 'wellbeing');
+  assert.ok(tasks.doneToday.includes(wellbeing.id));
+
+  assert.equal((await call('POST', `/crew/${crewId}/journal`, { text: '   ' })).status, 400);
+  assert.equal((await call('POST', `/crew/${crewId}/journal`, { text: 'Calm day.' })).status, 201);
+  const wb = (await call('GET', `/crew/${crewId}/wellbeing`)).body;
+  assert.equal(wb.assessments.length, 2);
+  assert.equal(wb.journal[0].text, 'Calm day.');
+
+  assert.equal((await call('POST', `/crew/${crewId}/cognitive`, { test: 'nope' })).status, 400);
+  assert.equal((await call('POST', `/crew/${crewId}/cognitive`, { test: 'memory', correct: 6 })).status, 400);
+  assert.equal((await call('POST', `/crew/${crewId}/cognitive`,
+    { test: 'reaction', avgReactionMs: 312.4, falseStarts: 1, details: ['Trial 1: 300 ms'] })).status, 201);
+  assert.equal((await call('POST', `/crew/${crewId}/cognitive`,
+    { test: 'symbols', correct: 9, durationSec: 14.2 })).status, 201);
+  const cog = (await call('GET', `/crew/${crewId}/cognitive`)).body;
+  assert.deepEqual(cog.map((r) => r.test), ['reaction', 'symbols']);
+  assert.equal(cog[1].max_correct, 10);
+
+  // Deleting the user removes the assessments too
+  assert.equal((await call('DELETE', `/crew/${crewId}`)).status, 204);
+  for (const t of ['psych_assessment', 'journal_entry', 'cognitive_result']) {
+    assert.equal(db.prepare(`SELECT COUNT(*) n FROM ${t} WHERE crew_id = ?`).get(crewId).n, 0, t);
+  }
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM psych_answer').get().n, 0);
+  assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
+});

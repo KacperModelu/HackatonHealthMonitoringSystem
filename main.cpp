@@ -1,23 +1,17 @@
+#include "login.h"
 #include "mainform.h"
-
 #include <QApplication>
-#include <QLocale>
-#include <QTranslator>
 
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
 
-    QTranslator translator;
-    const QStringList uiLanguages = QLocale::system().uiLanguages();
-    for (const QString &locale : uiLanguages) {
-        const QString baseName = "AstronautHealth_" + QLocale(locale).name();
-        if (translator.load(":/i18n/" + baseName)) {
-            a.installTranslator(&translator);
-            break;
-        }
-    }
-    mainform w;
+    Login w;
     w.show();
-    return QApplication::exec();
+
+    // Jeśli oba okna mają odpalić się naraz po uruchomieniu apki, odkomentuj te 2 linijki:
+    // mainform m;
+    // m.show();
+
+    return a.exec();
 }

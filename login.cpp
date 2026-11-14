@@ -1,7 +1,6 @@
 #include "login.h"
 #include "mainform.h"
 #include "ui_login.h"
-#include "vitalswindow.h"
 #include <QDebug>
 
 Login::Login(QWidget *parent)
@@ -18,15 +17,6 @@ Login::Login(QWidget *parent)
 Login::~Login()
 {
     delete ui;
-}
-
-void Login::on_pushButton_clicked()
-{
-    // Otwórz okno analizy parametrów cardio dla wybranego członka załogi
-    auto *vitals = new VitalsWindow(ui->comboBox->currentText());
-    vitals->setAttribute(Qt::WA_DeleteOnClose);
-    vitals->show();
-    close();
 }
 
 void Login::on_pushButton_2_clicked()

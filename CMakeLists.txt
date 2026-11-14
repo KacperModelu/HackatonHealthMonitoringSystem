@@ -22,10 +22,6 @@ set(PROJECT_SOURCES
         login.cpp
         login.h
         login.ui
-        vitalchart.h
-        vitalchart.cpp
-
-        vitalswindow.cpp
         ${TS_FILES}
 )
 

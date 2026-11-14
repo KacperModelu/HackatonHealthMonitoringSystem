@@ -121,6 +121,7 @@ p.pill { margin: 0 0 0.5rem; padding: 0.35rem 0.7rem; border-radius: 8px; }
 .tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); overflow-x: auto; margin-bottom: 1rem; }
 .tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; white-space: nowrap; color: var(--muted); }
 .tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.tab:hover:not(:disabled):not(.active) { border-color: transparent; border-bottom-color: var(--border); color: var(--text); }
 .content > * + * { margin-top: 1rem; }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.7rem; }
@@ -191,3 +192,53 @@ td .pill { margin-left: 0; }
   .grid2 { grid-template-columns: 1fr; }
   .charts { grid-template-columns: 1fr; }
 }
+
+/* --- wellbeing ------------------------------------------------------- */
+textarea {
+  font: inherit; color: inherit; width: 100%; padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface); resize: vertical;
+  margin-bottom: 0.6rem;
+}
+.activity { display: grid; gap: 0.6rem; justify-items: start; }
+.activity > * { margin: 0; }
+.activity textarea { justify-self: stretch; }
+.quiz { display: grid; gap: 0.8rem; max-width: 640px; }
+.quiz > * { margin: 0; }
+.question { font-size: 1.25rem; margin: 0.4rem 0; }
+.slider input { padding: 0; accent-color: var(--accent); }
+.slider-labels { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.85rem; color: var(--muted); margin-top: 0.3rem; }
+.slider-labels strong { color: var(--text); font-size: 1rem; }
+.choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: 0.5rem; margin: 0.4rem 0 0.8rem; }
+.choice { text-align: left; background: var(--surface); }
+.choice.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, var(--surface)); font-weight: 600; }
+.timer { display: grid; gap: 0.3rem; justify-items: center; text-align: center; padding: 1rem; width: 100%; background: var(--surface-2); border-radius: var(--radius); }
+.timer strong { font-size: 1.2rem; }
+.breath { width: 70px; height: 70px; border-radius: 50%; background: var(--accent); opacity: 0.6; transition: transform 1s linear; }
+.breath.in, .breath.hold { transform: scale(1.5); }
+.breath.out, .breath.pause { transform: scale(0.8); }
+.journal { list-style: none; padding: 0; margin: 0; }
+.journal li { border-bottom: 1px solid var(--border); padding: 0.5rem 0; }
+.journal li:last-child { border-bottom: 0; }
+.journal p { margin: 0.2rem 0 0; white-space: pre-wrap; }
+
+/* --- cognitive tests ------------------------------------------------- */
+.cog-menu { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 0.6rem; }
+.cog-item { display: grid; gap: 0.2rem; text-align: left; background: var(--surface); }
+.cog { display: grid; gap: 0.8rem; justify-items: center; text-align: center; max-width: 640px; margin: 0 auto; }
+.cog > * { margin: 0; }
+.cog-done { display: grid; gap: 0.6rem; justify-items: center; }
+.cog-display { font-size: 1.15rem; margin: 0; }
+.cog-display.big { font-size: 2.6rem; font-weight: 700; letter-spacing: 0.08em; min-height: 3.4rem; }
+.cog-display.small-text { font-size: 1rem; max-width: 50ch; }
+.cog-form { display: grid; gap: 0.6rem; justify-items: center; }
+.cog-form input { max-width: 220px; text-align: center; font-size: 1.4rem; letter-spacing: 0.1em; }
+.reaction { width: 100%; min-height: 180px; display: grid; place-items: center; gap: 0.4rem; font-weight: 600; user-select: none; touch-action: manipulation; }
+.reaction.waiting { background: var(--critical-bg); color: var(--critical); }
+.reaction.ready { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+.matrix { width: auto; margin: 0 auto; font-size: 1.4rem; }
+.matrix td { border: 1px solid var(--border); text-align: center; padding: 0.4rem 0.9rem; }
+.key { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem 1rem; font-size: 1.1rem; }
+kbd { font: inherit; font-weight: 600; padding: 0 0.4rem; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-2); }
+.row.center { justify-content: center; }
+.digit { min-width: 3rem; font-size: 1.2rem; font-weight: 600; }
+button.link { background: none; border: 0; color: var(--muted); text-decoration: underline; }

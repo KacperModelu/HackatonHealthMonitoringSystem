@@ -3,6 +3,9 @@ import express from 'express';
 import { plain, transaction } from './db.js';
 import { generate, validatePerson } from './generator.js';
 import { computeSummary, localToday } from './gamification.js';
+import { COGNITIVE_TESTS, PSYCH_THRESHOLD, scorePsych, testByCode } from '../src/assessments.js';
+
+const nowIso = () => new Date().toISOString().slice(0, 19) + 'Z';
 
 const ageFrom = (birth, today = localToday()) => {
   const [by, bm, bd] = birth.split('-').map(Number);
@@ -61,8 +64,10 @@ export function createApi(db) {
       const missions = plain(db.prepare(
         'SELECT mission_id FROM crew_assignment WHERE crew_id = ?',
       ).all(id)).map((m) => m.mission_id);
+      db.prepare(`DELETE FROM psych_answer WHERE assessment_id IN
+                  (SELECT id FROM psych_assessment WHERE crew_id = ?)`).run(id);
       for (const t of ['test_session', 'vitals_reading', 'task_completion', 'simulated_event',
-        'crew_assignment']) {
+        'psych_assessment', 'journal_entry', 'cognitive_result', 'crew_assignment']) {
         db.prepare(`DELETE FROM ${t} WHERE crew_id = ?`).run(id);
       }
       db.prepare('DELETE FROM crew_member WHERE id = ?').run(id);
@@ -187,6 +192,104 @@ export function createApi(db) {
         .run(id, taskId, today);
     }
     res.json(tasksPayload(id, today));
+  });
+
+  // --- psychological & cognitive assessments ------------------------------------
+  const markWellbeingTask = (id) => {
+    db.prepare(
+      `INSERT OR IGNORE INTO task_completion (crew_id, task_id, completed_on, created_in_app)
+       SELECT ?, id, ?, 1 FROM health_task WHERE code = 'wellbeing'`,
+    ).run(id, localToday());
+  };
+
+  api.get('/crew/:id/wellbeing', (req, res) => {
+    const id = Number(req.params.id);
+    if (!crewExists(id)) return res.status(404).json({ error: 'No such crew member.' });
+    res.json({
+      threshold: PSYCH_THRESHOLD,
+      assessments: plain(db.prepare(
+        'SELECT id, taken_at, score, max_score, percent FROM psych_assessment WHERE crew_id = ? ORDER BY taken_at',
+      ).all(id)),
+      journal: plain(db.prepare(
+        'SELECT id, written_at, text FROM journal_entry WHERE crew_id = ? ORDER BY written_at DESC',
+      ).all(id)),
+    });
+  });
+
+  api.post('/crew/:id/psych', (req, res) => {
+    const id = Number(req.params.id);
+    if (!crewExists(id)) return res.status(404).json({ error: 'No such crew member.' });
+    const result = scorePsych(req.body?.answers);
+    if (result.error) return res.status(400).json({ error: result.error });
+    const assessmentId = transaction(db, () => {
+      const aid = Number(db.prepare(
+        'INSERT INTO psych_assessment (crew_id, taken_at, score, max_score, percent) VALUES (?,?,?,?,?)',
+      ).run(id, nowIso(), result.score, result.max, result.percent).lastInsertRowid);
+      const ins = db.prepare('INSERT INTO psych_answer VALUES (?,?,?,?,?)');
+      result.items.forEach((x, i) => ins.run(aid, i + 1, x.question, x.answer, x.points));
+      markWellbeingTask(id);   // counts as the daily "How do you feel?" task
+      return aid;
+    });
+    res.status(201).json({
+      id: assessmentId,
+      score: result.score,
+      max: result.max,
+      percent: result.percent,
+      belowThreshold: result.percent < PSYCH_THRESHOLD,
+      items: result.items,
+    });
+  });
+
+  api.post('/crew/:id/journal', (req, res) => {
+    const id = Number(req.params.id);
+    if (!crewExists(id)) return res.status(404).json({ error: 'No such crew member.' });
+    const text = String(req.body?.text ?? '').trim();
+    if (!text) return res.status(400).json({ error: 'Please write something first.' });
+    if (text.length > 20000) return res.status(400).json({ error: 'Journal entry is too long.' });
+    db.prepare('INSERT INTO journal_entry (crew_id, written_at, text) VALUES (?,?,?)').run(id, nowIso(), text);
+    res.status(201).json({ ok: true });
+  });
+
+  api.get('/crew/:id/cognitive', (req, res) => {
+    const id = Number(req.params.id);
+    if (!crewExists(id)) return res.status(404).json({ error: 'No such crew member.' });
+    res.json(plain(db.prepare(
+      `SELECT id, taken_at, test, correct, max_correct, avg_reaction_ms, false_starts, duration_sec
+       FROM cognitive_result WHERE crew_id = ? ORDER BY taken_at`,
+    ).all(id)));
+  });
+
+  api.post('/crew/:id/cognitive', (req, res) => {
+    const id = Number(req.params.id);
+    if (!crewExists(id)) return res.status(404).json({ error: 'No such crew member.' });
+    const b = req.body ?? {};
+    const test = testByCode(b.test);
+    if (!test) {
+      return res.status(400).json({ error: `Unknown test (expected ${COGNITIVE_TESTS.map((t) => t.code).join(', ')}).` });
+    }
+    const num = (v, lo, hi) => (Number.isFinite(v) && v >= lo && v <= hi ? v : undefined);
+    const row = { correct: null, avg: null, falseStarts: null, duration: null };
+    if (test.code === 'reaction') {
+      row.avg = num(b.avgReactionMs, 50, 10000);
+      row.falseStarts = num(b.falseStarts, 0, 1000);
+      if (row.avg === undefined || !Number.isInteger(row.falseStarts)) {
+        return res.status(400).json({ error: 'Reaction time result is invalid.' });
+      }
+    } else {
+      row.correct = num(b.correct, 0, test.max);
+      if (!Number.isInteger(row.correct)) return res.status(400).json({ error: 'Score is invalid.' });
+      if (test.code === 'symbols') {
+        row.duration = num(b.durationSec, 0, 600);
+        if (row.duration === undefined) return res.status(400).json({ error: 'Duration is invalid.' });
+      }
+    }
+    const details = Array.isArray(b.details) ? b.details.slice(0, 50).map(String).join('\n') : '';
+    db.prepare(
+      `INSERT INTO cognitive_result (crew_id, taken_at, test, correct, max_correct, avg_reaction_ms,
+         false_starts, duration_sec, details) VALUES (?,?,?,?,?,?,?,?,?)`,
+    ).run(id, nowIso(), test.code, row.correct, test.code === 'reaction' ? null : test.max,
+      row.avg, row.falseStarts, row.duration, details);
+    res.status(201).json({ ok: true });
   });
 
   // --- plain-language guide -----------------------------------------------------

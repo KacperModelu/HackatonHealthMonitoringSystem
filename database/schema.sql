@@ -263,6 +263,46 @@ CREATE TABLE simulated_event (
     source           TEXT NOT NULL CHECK (source IN ('generator','app'))
 );
 
+-- Psychological wellbeing questionnaire (10 questions, up to 10 points each)
+CREATE TABLE psych_assessment (
+    id        INTEGER PRIMARY KEY,
+    crew_id   INTEGER NOT NULL REFERENCES crew_member(id),
+    taken_at  TEXT NOT NULL,                      -- ISO datetime (UTC)
+    score     INTEGER NOT NULL,
+    max_score INTEGER NOT NULL,
+    percent   REAL NOT NULL                        -- < 60 % = contact support
+);
+CREATE TABLE psych_answer (
+    assessment_id INTEGER NOT NULL REFERENCES psych_assessment(id),
+    question_no   INTEGER NOT NULL,
+    question      TEXT NOT NULL,
+    answer        TEXT NOT NULL,
+    points        INTEGER NOT NULL CHECK (points BETWEEN 0 AND 10),
+    PRIMARY KEY (assessment_id, question_no)
+);
+-- Private journal entries (supportive activity)
+CREATE TABLE journal_entry (
+    id         INTEGER PRIMARY KEY,
+    crew_id    INTEGER NOT NULL REFERENCES crew_member(id),
+    written_at TEXT NOT NULL,
+    text       TEXT NOT NULL
+);
+-- Cognitive tests: reaction, memory, two_back, matrix, spatial, symbols
+CREATE TABLE cognitive_result (
+    id              INTEGER PRIMARY KEY,
+    crew_id         INTEGER NOT NULL REFERENCES crew_member(id),
+    taken_at        TEXT NOT NULL,
+    test            TEXT NOT NULL CHECK (test IN ('reaction','memory','two_back','matrix','spatial','symbols')),
+    correct         INTEGER,                      -- NULL for reaction time
+    max_correct     INTEGER,
+    avg_reaction_ms REAL,                         -- reaction time only
+    false_starts    INTEGER,                      -- reaction time only
+    duration_sec    REAL,                         -- digit-symbol matching only
+    details         TEXT NOT NULL                 -- one line per trial / question
+);
+CREATE INDEX idx_psych_crew     ON psych_assessment(crew_id, taken_at);
+CREATE INDEX idx_cognitive_crew ON cognitive_result(crew_id, test, taken_at);
+
 CREATE INDEX idx_session_crew      ON test_session(crew_id, session_date);
 CREATE INDEX idx_vitals_crew_time  ON vitals_reading(crew_id, measured_at);
 

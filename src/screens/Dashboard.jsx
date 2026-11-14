@@ -7,8 +7,10 @@ import { go } from '../router.js';
 import { PARAMS, STATUS_TEXT, classify, fmt, rangeMap } from '../vitals.js';
 import Tasks from './Tasks.jsx';
 import Guide from './Guide.jsx';
+import Wellbeing from './Wellbeing.jsx';
+import Cognitive from './Cognitive.jsx';
 
-const TABS = ['Overview', 'Vitals', 'Fitness', 'ECG', 'Daily tasks', 'Guide'];
+const TABS = ['Overview', 'Vitals', 'Fitness', 'ECG', 'Wellbeing', 'Cognitive', 'Daily tasks', 'Guide'];
 
 // Health dashboard of one crew member.
 export default function Dashboard({ crewId }) {
@@ -82,6 +84,8 @@ export default function Dashboard({ crewId }) {
         {tab === 'Vitals' && <Vitals data={data} mission={mission} />}
         {tab === 'Fitness' && <Fitness tests={data.tests} />}
         {tab === 'ECG' && <Ecg ecgs={data.ecgs} />}
+        {tab === 'Wellbeing' && <Wellbeing crewId={crew.id} />}
+        {tab === 'Cognitive' && <Cognitive crewId={crew.id} />}
         {tab === 'Daily tasks' && <Tasks crewId={crew.id} />}
         {tab === 'Guide' && <Guide />}
       </div>

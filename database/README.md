@@ -80,6 +80,18 @@ WHERE e.start_flight_day IS NOT NULL
 GROUP BY e.id;
 ```
 
+## Ocena psychologiczna i kognitywna (zapisywana w aplikacji)
+
+| Tabela | Zawartość |
+|---|---|
+| `psych_assessment` | kwestionariusz samopoczucia: wynik, % maksimum (poniżej 60 % → kontakt z zespołem wsparcia) |
+| `psych_answer` | odpowiedzi na 10 pytań (pytanie, odpowiedź, punkty 0–10) |
+| `journal_entry` | wpisy dziennika (aktywność wspierająca) |
+| `cognitive_result` | testy: `reaction` (średni czas, falstarty), `memory`, `two_back`, `matrix`, `spatial`, `symbols` (+ czas) |
+
+Tabele są tworzone także w starszych kopiach bazy przy starcie serwera (`server/db.js`).
+Wypełnienie kwestionariusza zalicza codzienne zadanie „How do you feel?”.
+
 ## Widoki do analizy
 
 - `v_session_overview` – wszystkie sesje z nazwiskiem, misją i etykietą harmonogramu,

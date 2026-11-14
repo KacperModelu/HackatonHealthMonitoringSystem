@@ -1,5 +1,5 @@
 // Points, streaks, ranks and badges computed from task_completion
-// (same rules as the Qt dashboard on the cardio_analysis branch).
+// Everything is derived on the fly, so the rules live only here.
 
 export const DAILY_GOAL = 50;   // points per day
 

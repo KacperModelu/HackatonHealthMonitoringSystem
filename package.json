@@ -1,9 +1,9 @@
 {
-  "name": "astronaut-health-web",
+  "name": "astronaut-health-monitor",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "React version of the Astronaut Health Monitor (Express + better-sqlite3 API on database/cardio_analysis.db)",
+  "description": "Astronaut Health Monitor: React + Express app on database/cardio_analysis.db",
   "scripts": {
     "dev": "node server/index.js",
     "build": "vite build",
@@ -11,7 +11,7 @@
     "test": "node --test server/"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   },
   "dependencies": {
     "express": "^4.21.2",

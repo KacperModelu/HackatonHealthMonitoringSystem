@@ -41,7 +41,7 @@ const call = async (method, url, body) => {
   return { status: res.status, body: res.status === 204 ? null : await res.json() };
 };
 
-test('form validation mirrors the Qt form', async () => {
+test('form validation rejects bad input', async () => {
   assert.equal((await call('POST', '/crew', { firstName: '', lastName: 'X', age: 30 })).status, 400);
   assert.equal((await call('POST', '/crew', { firstName: 'A', lastName: 'B', age: 12 })).status, 400);
   assert.equal((await call('POST', '/crew', { firstName: 'A', lastName: 'B', age: 30, heightCm: '300' })).status, 400);

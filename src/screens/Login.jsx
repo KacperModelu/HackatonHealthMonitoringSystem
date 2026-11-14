@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { go } from '../router.js';
 
-// Login screen (login.ui): choose an astronaut, log in, add or delete a user.
+// Login screen: choose an astronaut, log in, add or delete a user.
 export default function Login({ selected }) {
   const [crew, setCrew] = useState(null);
   const [current, setCurrent] = useState('');

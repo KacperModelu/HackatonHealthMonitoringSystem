@@ -1,5 +1,5 @@
-// Access to the shared SQLite database (the same file the Qt app and the
-// Python generator use). Uses Node's built-in node:sqlite, so there are no
+// Access to the SQLite database (database/cardio_analysis.db, created by
+// database/generate_cardio_db.py). Uses Node's built-in node:sqlite, so there are no
 // native dependencies to compile.
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync } from 'node:fs';
@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-export const defaultDbPath = path.resolve(here, '../../database/cardio_analysis.db');
+export const defaultDbPath = path.resolve(here, '../database/cardio_analysis.db');
 
 export function openDb(file = process.env.CARDIO_DB || defaultDbPath) {
   if (!existsSync(file)) {

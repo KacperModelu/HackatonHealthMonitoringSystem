@@ -1,11 +1,49 @@
-
 # HackatonHealthMonitoringSystem
+
 Long-duration missions expose astronauts to space radiation, isolation and confinement, altered gravity, and a hostile closed environment, which can bring immune changes, bone loss, cardiovascular events, and behavioral health problems. On long missions, astronauts carry much of the responsibility for spotting these changes in themselves.
 
-## Wersja webowa (React)
+**Health Monitor** helps astronauts track their own cardiovascular health: colour-coded vitals,
+charts over the mission, fitness and ECG results, daily health tasks with points and badges,
+and plain-language explanations of every measurement.
 
-W katalogu [`web/`](web/README.md) jest ta sama aplikacja przepisana na React + Node (Express) – korzysta z tej samej bazy `database/cardio_analysis.db`.
+## Uruchomienie
+
+Wymaga Node.js 22.13+ (testowane na Node 26).
 
 ```bash
-cd web && npm install && npm run dev
+npm install
+npm run dev          # http://localhost:5173
 ```
+
+Produkcyjnie: `npm run build && npm start`. Inna baza (np. kopia do testów):
+`CARDIO_DB=/ścieżka/do/kopii.db npm run dev`. Port: zmienna `PORT`.
+
+Testy API (działają na tymczasowej kopii bazy, prawdziwej nie zmieniają): `npm test`.
+
+## Budowa
+
+- **React** (Vite) – `src/`: logowanie → dodawanie użytkownika („Generate user data”) → panel zdrowia,
+- **Express + `node:sqlite`** – `server/`: API na bazie `database/cardio_analysis.db`
+  (wbudowany moduł SQLite w Node, bez natywnych zależności do kompilowania),
+- **Baza** – `database/`: schemat, generator w Pythonie i opis danych ([database/README.md](database/README.md)).
+
+## Ekrany
+
+| Plik | Co robi |
+|---|---|
+| `src/screens/Login.jsx` | wybór astronauty z bazy, Log in / Add user / Delete user |
+| `src/screens/UserForm.jsx` | formularz + „Generate user data” → fałszywe dane z 0–3 odchyleniami od normy |
+| `src/screens/Dashboard.jsx` | panel: przegląd, wykresy parametrów życiowych, wydolność (VO₂peak), EKG |
+| `src/screens/Tasks.jsx` | zadania dnia: punkty, serie, rangi, odznaki |
+| `src/screens/Guide.jsx` | poradnik: czym jest wskaźnik, jak mierzyć, kiedy reagować |
+
+Usuwać można tylko osoby dodane w aplikacji (`created_in_app = 1`) – razem z ich danymi i misją `SIM-xxx`.
+Fikcyjna załoga referencyjna z `generate_cardio_db.py` jest chroniona.
+
+## Serwer
+
+| Plik | Zawartość |
+|---|---|
+| `server/generator.js` | fałszywe dane: misja, testy na cykloergometrze wg harmonogramu NASA N3.07, EKG, pomiary w locie; zdarzenia → `simulated_event` |
+| `server/api.js` | `GET/POST/DELETE /api/crew`, `GET /api/crew/:id/dashboard`, `GET/POST /api/crew/:id/tasks`, `GET /api/guide` |
+| `server/gamification.js` | punkty, serie, rangi, odznaki |

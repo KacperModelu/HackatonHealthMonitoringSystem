@@ -4,7 +4,7 @@ import { go } from '../router.js';
 
 const EMPTY = { firstName: '', lastName: '', age: '', sex: 'M', heightCm: '', weightKg: '' };
 
-// New user form (mainform.ui). "Generate user data" creates the person and a
+// New user form. "Generate user data" creates the person and a
 // full fake health record with 0–3 random deviations from the norm.
 export default function UserForm() {
   const [form, setForm] = useState(EMPTY);

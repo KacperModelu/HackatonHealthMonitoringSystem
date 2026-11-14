@@ -1,4 +1,4 @@
-// Port of datagenerator.cpp: generates a FAKE but physiologically plausible
+// Generates a FAKE but physiologically plausible
 // health record for a new crew member and stores it in the database:
 //   * a completed mission (~5–6 months, returned ~5–6 weeks ago),
 //   * cycle ergometer tests following the NASA N3.07 schedule

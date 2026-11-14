@@ -10,7 +10,7 @@ import Guide from './Guide.jsx';
 
 const TABS = ['Overview', 'Vitals', 'Fitness', 'ECG', 'Daily tasks', 'Guide'];
 
-// Stats screen (statsscreen.ui), extended into a dashboard.
+// Health dashboard of one crew member.
 export default function Dashboard({ crewId }) {
   const [tab, setTab] = useState('Overview');
   const [missionId, setMissionId] = useState(null);

@@ -1,6 +1,6 @@
 # Baza danych do analizy kardiologicznej
 
-SQLite: `cardio_analysis.db` (Qt czyta ją przez moduł QtSql, sterownik `QSQLITE`).
+SQLite: `cardio_analysis.db` (aplikacja czyta ją przez wbudowany moduł Node `node:sqlite`, zob. `server/db.js`).
 
 Odtworzenie bazy (deterministyczne, ten sam wynik za każdym razem):
 
@@ -46,7 +46,7 @@ python3 database/generate_cardio_db.py
 | `task_completion` | ~34 tys. wykonanych zadań (syntetyczna historia do 13.11.2026 + to, co odhaczysz w aplikacji) |
 | `indicator_guide` | proste wyjaśnienia: czym jest wskaźnik, jak mierzyć, dlaczego ważny w kosmosie, kiedy reagować |
 
-Punkty, serie (streak), rangi i odznaki liczy `gamification.cpp` na podstawie `task_completion`.
+Punkty, serie (streak), rangi i odznaki liczy `server/gamification.js` na podstawie `task_completion`.
 
 Wbudowane zdarzenia do analizy:
 test przerwany z powodu arytmii (FD 75), duszność po powrocie (R+5),

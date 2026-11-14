@@ -250,6 +250,19 @@ CREATE TABLE indicator_guide (
     requirement_id INTEGER REFERENCES medical_requirement(id)
 );
 
+-- Ground truth for the synthetic data: which deviations from the norm were
+-- deliberately simulated for each crew member (to check analyses against).
+CREATE TABLE simulated_event (
+    id               INTEGER PRIMARY KEY,
+    crew_id          INTEGER NOT NULL REFERENCES crew_member(id),
+    mission_id       INTEGER REFERENCES mission(id),
+    kind             TEXT NOT NULL,         -- 'fever', 'hypertension', 'co2', 'ecg_avb1', ...
+    start_flight_day INTEGER,               -- NULL for test-related events
+    end_flight_day   INTEGER,
+    description      TEXT NOT NULL,
+    source           TEXT NOT NULL CHECK (source IN ('generator','app'))
+);
+
 CREATE INDEX idx_session_crew      ON test_session(crew_id, session_date);
 CREATE INDEX idx_vitals_crew_time  ON vitals_reading(crew_id, measured_at);
 

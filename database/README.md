@@ -48,10 +48,37 @@ python3 database/generate_cardio_db.py
 
 Punkty, serie (streak), rangi i odznaki liczy `gamification.cpp` na podstawie `task_completion`.
 
-Wbudowane zdarzenia do analizy: test przerwany z powodu arytmii (FD 75), duszność po powrocie (R+5),
+Wbudowane zdarzenia do analizy:
+test przerwany z powodu arytmii (FD 75), duszność po powrocie (R+5),
 test submaksymalny do powtórzenia, awaria PPFS (test bez analizy gazów), blok AV I st.,
 pojedyncze PVC, wydłużony QTc, epizod podwyższonego CO₂ na HMS-2 (oddechy ↑, SpO₂ ↓),
 gorączka, narastające ciśnienie pod koniec misji.
+
+## Generowanie danych w aplikacji („Generate user data”)
+
+Przycisk w formularzu nowego użytkownika tworzy osobę i od razu generuje dla niej **fałszywe** dane
+do analizy (zapis w tej bazie, kolumna `created_in_app = 1`):
+
+- misja `SIM-xxx` (~150–190 dni, zakończona 5–6 tygodni temu),
+- testy na cykloergometrze wg harmonogramu N3.07 (annual, L-12 m, L-90/30 supine + upright, FD 14, FD 75, R-14, R+5, R+30)
+  z wynikami etapów i ciśnieniem,
+- EKG przed i po locie, pomiary w locie 2× dziennie.
+
+Dla różnorodności każda osoba losowo dostaje 0–3 odchylenia od normy: nadciśnienie, niedociśnienie, tachykardia,
+bradykardia, gorączka, podwyższone CO₂, desaturacja (SpO₂ < 92 %), artefakty czujników, silny spadek VO₂peak,
+nieprawidłowe EKG, przerwany test R+5. Co zostało zasymulowane, zapisuje tabela **`simulated_event`**
+(`source = 'app'`; zdarzenia ze skryptu Pythona mają `source = 'generator'`) – to „prawda” do sprawdzania analiz.
+
+```sql
+-- Czy alerty pokrywają się z zasymulowanymi zdarzeniami?
+SELECT e.kind, e.start_flight_day, e.end_flight_day, COUNT(a.id) AS alerts
+FROM simulated_event e
+LEFT JOIN vitals_reading v ON v.crew_id = e.crew_id
+     AND v.flight_day BETWEEN e.start_flight_day AND e.end_flight_day
+LEFT JOIN v_vitals_alerts a ON a.id = v.id
+WHERE e.start_flight_day IS NOT NULL
+GROUP BY e.id;
+```
 
 ## Widoki do analizy
 

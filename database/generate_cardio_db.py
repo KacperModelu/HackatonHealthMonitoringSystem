@@ -598,6 +598,22 @@ class Builder:
             " VALUES (?,?,?,?,?,?,?,?,?,?)", rows)
 
 
+EVENT_KIND = {"co2": "co2", "fever": "fever", "htn": "hypertension", "brady": "bradycardia"}
+EVENT_TEXT = {
+    "co2": "Elevated cabin CO2: faster breathing, lower SpO2, higher heart rate",
+    "fever": "Mild infection: skin temperature, heart rate and breathing up",
+    "htn": "Rising blood pressure trend",
+    "brady": "Resting heart rate about 12 bpm lower than usual",
+}
+ECG_TEXT = {
+    "avb1": "First-degree AV block (PR > 200 ms)",
+    "pvc": "Isolated premature ventricular complexes",
+    "rbbb": "Incomplete right bundle branch block (normal variant)",
+    "qtc": "Borderline prolonged QTc",
+    "earlyrep": "Early repolarization (normal variant)",
+}
+
+
 def jitter(d, flex):
     return d + timedelta(days=rng.randint(-flex, flex)) if flex else d
 
@@ -712,6 +728,20 @@ def build(path):
 
             mission_events = mission_wide_events.get(mid, [])
             b.vitals(cid, mid, launch, ret, mission_events + crew_events.get(cid, []))
+
+            # Ground truth of what was simulated (no RNG use: data stays identical)
+            for kind, start, end in mission_events + crew_events.get(cid, []):
+                db.execute("INSERT INTO simulated_event (crew_id, mission_id, kind, "
+                           "start_flight_day, end_flight_day, description, source) "
+                           "VALUES (?,?,?,?,?,?, 'generator')",
+                           (cid, mid, EVENT_KIND[kind], start, end, EVENT_TEXT[kind]))
+            for when in ("pre", "post"):
+                special = ecg_special.get((cid, when))
+                if special:
+                    db.execute("INSERT INTO simulated_event (crew_id, mission_id, kind, "
+                               "description, source) VALUES (?,?,?,?, 'generator')",
+                               (cid, mid, "ecg_" + special,
+                                f"{ECG_TEXT[special]} ({when}flight ECG)"))
 
     # Non-assigned astronauts: annual tests only
     for cid in (13, 14, 15):

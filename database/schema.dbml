@@ -233,7 +233,16 @@ Table task_completion {
   crew_id integer [not null]
   task_id integer [not null]
   completed_on text [not null]
-  created_in_app integer [not null, default: 0]
+  created_in_app integer [not null, default: 0, note: 'Generated task-history rows randomly use 0 or 1.']
+
+  Indexes {
+    (crew_id, task_id, completed_on) [unique]
+    (crew_id, completed_on) [name: 'idx_completion_crew']
+  }
+
+  checks {
+    `created_in_app IN (0, 1)`
+  }
 }
 
 Ref: task_completion.crew_id > crew_member.id

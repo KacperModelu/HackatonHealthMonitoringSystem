@@ -140,6 +140,37 @@ p.pill { margin: 0 0 0.5rem; padding: 0.35rem 0.7rem; border-radius: 8px; }
 .tile-status { font-weight: 600; font-size: 0.85rem; }
 .tile-foot { font-size: 0.78rem; color: var(--muted); }
 
+/* --- body map ------------------------------------------------------------ */
+.body-card { display: grid; grid-template-columns: minmax(140px, 220px) 1fr; gap: 1.2rem; align-items: center; }
+.body-figure svg { width: 100%; height: auto; max-height: 420px; display: block; margin: 0 auto; }
+.body-part { cursor: pointer; transition: filter 0.15s; stroke-width: 1.5; stroke-linejoin: round; }
+.body-part.hot { filter: drop-shadow(0 0 4px var(--accent)); stroke-width: 2.5; }
+.body-part.base.s-ok { fill: var(--ok-bg); stroke: var(--ok); }
+.body-part.base.s-warning { fill: var(--warning-bg); stroke: var(--warning); }
+.body-part.base.s-critical { fill: var(--critical-bg); stroke: var(--critical); }
+.body-part.base.s-none { fill: var(--surface-2); stroke: var(--border); }
+.body-part.organ { stroke: var(--surface); fill-opacity: 0.85; }
+.body-part.organ.s-ok { fill: var(--ok); }
+.body-part.organ.s-warning { fill: var(--warning); }
+.body-part.organ.s-critical { fill: var(--critical); }
+.body-part.organ.s-none { fill: var(--muted); fill-opacity: 0.35; }
+.body-legend ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.4rem; }
+.body-row { width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: 0.7rem; align-items: center; text-align: left; background: var(--surface); }
+.body-row.hot { border-color: var(--accent); }
+.body-text { display: grid; gap: 0.1rem; min-width: 0; }
+.body-row .pill { margin-left: 0; white-space: nowrap; }
+.body-dot { width: 0.8rem; height: 0.8rem; border-radius: 50%; }
+.body-dot.s-ok { background: var(--ok); }
+.body-dot.s-warning { background: var(--warning); }
+.body-dot.s-critical { background: var(--critical); }
+.body-dot.s-none { background: var(--border); }
+@media (max-width: 640px) {
+  .body-card { grid-template-columns: 1fr; }
+  .body-figure svg { max-height: 300px; }
+  .body-row { grid-template-columns: auto 1fr; }
+  .body-row .pill { grid-column: 2; justify-self: start; }
+}
+
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .segmented button { border: 0; border-radius: 0; background: var(--surface); }
 .segmented button.active { background: var(--accent); color: var(--accent-text); }

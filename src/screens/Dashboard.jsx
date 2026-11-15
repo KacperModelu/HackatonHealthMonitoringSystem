@@ -4,21 +4,26 @@ import {
 } from 'recharts';
 import { api } from '../api.js';
 import { go } from '../router.js';
-import { PARAMS, STATUS_TEXT, classify, fmt, rangeMap } from '../vitals.js';
+import { PARAMS, STATUS_TEXT, classify, ecgLimits, fitnessStatus, fmt, rangeMap } from '../vitals.js';
 import Tasks from './Tasks.jsx';
 import Guide from './Guide.jsx';
 import Wellbeing from './Wellbeing.jsx';
 import Cognitive from './Cognitive.jsx';
+import BodyMap from './BodyMap.jsx';
 
 const TABS = ['Overview', 'Vitals', 'Fitness', 'ECG', 'Wellbeing', 'Cognitive', 'Daily tasks', 'Guide'];
 
 // Health dashboard of one crew member.
+// The medical data of the first four tabs comes from one request (/dashboard) and is
+// handed down as `data`. Wellbeing, Cognitive, Daily tasks and Guide load their own
+// data when their tab is opened.
 export default function Dashboard({ crewId }) {
   const [tab, setTab] = useState('Overview');
-  const [missionId, setMissionId] = useState(null);
+  const [missionId, setMissionId] = useState(null);   // null = the latest mission (chosen by the server)
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
 
+  // Reload when the person or the selected mission changes.
   useEffect(() => {
     api.dashboard(crewId, missionId).then(setData).catch((e) => setError(e.message));
   }, [crewId, missionId]);
@@ -83,7 +88,7 @@ export default function Dashboard({ crewId }) {
         {tab === 'Overview' && <Overview data={data} mission={mission} openTab={setTab} />}
         {tab === 'Vitals' && <Vitals data={data} mission={mission} />}
         {tab === 'Fitness' && <Fitness tests={data.tests} />}
-        {tab === 'ECG' && <Ecg ecgs={data.ecgs} />}
+        {tab === 'ECG' && <Ecg ecgs={data.ecgs} sex={crew.sex} />}
         {tab === 'Wellbeing' && <Wellbeing crewId={crew.id} />}
         {tab === 'Cognitive' && <Cognitive crewId={crew.id} />}
         {tab === 'Daily tasks' && <Tasks crewId={crew.id} />}
@@ -94,11 +99,15 @@ export default function Dashboard({ crewId }) {
 }
 
 // --- Overview ----------------------------------------------------------------------
+// "Where do I stand?" on one screen: the body map, one tile per vital sign for the
+// latest reading, and short fitness / ECG summaries. Tiles and body parts are buttons
+// that open the tab with the details.
 function Overview({ data, mission, openTab }) {
   const ranges = rangeMap(data.ranges);
-  const last = data.vitals.at(-1);
+  const last = data.vitals.at(-1);                  // latest in-flight reading (rows are sorted by time)
+  // Counting alerts walks every reading of the mission; useMemo repeats it only when the data changes.
   const alerts = useMemo(() => countAlerts(data.vitals, ranges), [data.vitals]);
-  const lastTest = [...data.tests].reverse().find((t) => t.vo2peak_ml_kg_min);
+  const lastTest = [...data.tests].reverse().find((t) => t.vo2peak_ml_kg_min);   // latest test that measured VO2
   const abnormalEcg = data.ecgs.filter((e) => e.abnormal);
 
   return (
@@ -111,6 +120,8 @@ function Overview({ data, mission, openTab }) {
       ) : (
         <p className="muted">No mission yet: only annual fitness tests are available.</p>
       )}
+
+      <BodyMap data={data} crewId={data.crew.id} openTab={openTab} />
 
       {last && (
         <>
@@ -139,7 +150,7 @@ function Overview({ data, mission, openTab }) {
               Last VO₂peak <strong>{fmt(lastTest.vo2peak_ml_kg_min, 1)} ml/kg/min</strong> ({lastTest.label},{' '}
               {lastTest.session_date})
               {lastTest.pct_vs_preflight != null && (
-                <span className={`pill ${lastTest.pct_vs_preflight < -20 ? 'critical' : lastTest.pct_vs_preflight < -10 ? 'warning' : 'ok'}`}>
+                <span className={`pill ${fitnessStatus(lastTest.pct_vs_preflight)}`}>
                   {lastTest.pct_vs_preflight > 0 ? '+' : ''}{lastTest.pct_vs_preflight}% vs preflight
                 </span>
               )}
@@ -178,6 +189,7 @@ function Overview({ data, mission, openTab }) {
   );
 }
 
+// For each vital sign: how many readings of the mission were amber and how many red.
 function countAlerts(vitals, ranges) {
   const out = Object.fromEntries(PARAMS.map((p) => [p.key, { warning: 0, critical: 0 }]));
   for (const v of vitals) {
@@ -204,6 +216,8 @@ function Vitals({ data, mission }) {
   const [days, setDays] = useState(0);   // 0 = whole mission
   if (!data.vitals.length) return <p className="muted">No in-flight vitals for this person.</p>;
 
+  // Keep only the chosen number of last days. x = flight day, with +0.5 for the
+  // evening reading, so the two readings of one day are drawn side by side.
   const maxDay = data.vitals.at(-1).flight_day;
   const rows = data.vitals
     .filter((v) => !days || v.flight_day > maxDay - days)
@@ -259,6 +273,8 @@ function Vitals({ data, mission }) {
   );
 }
 
+// Custom chart point: normal readings are tiny green dots, so that amber and red
+// ones (drawn larger, with a white outline) stand out along the line.
 const DOT = { ok: '#2e9d5b', warning: '#e0a100', critical: '#d64545' };
 function StatusDot({ cx, cy, payload, range, dataKey }) {
   if (cx == null || cy == null) return null;
@@ -270,6 +286,8 @@ function StatusDot({ cx, cy, payload, range, dataKey }) {
 // --- Fitness (N3.07 cycle ergometer) -------------------------------------------
 function Fitness({ tests }) {
   if (!tests.length) return <p className="muted">No cycle ergometer tests.</p>;
+  // The chart shows only tests that can be compared: with gas analysis and not supine
+  // (lying down gives a lower VO2peak for the same fitness). The table lists them all.
   const chart = tests
     .filter((t) => t.vo2peak_ml_kg_min && t.position !== 'supine')
     .map((t) => ({ name: t.label, date: t.session_date, vo2: t.vo2peak_ml_kg_min, hr: t.hr_peak_bpm }));
@@ -280,7 +298,7 @@ function Fitness({ tests }) {
         <h2>VO₂peak over time <span className="muted small">ml/kg/min, upright tests</span></h2>
         <p className="muted small">
           Aerobic fitness usually drops in the first weeks of flight and recovers within a month after landing.
-          A drop of more than 20% from preflight is marked red.
+          A drop of more than 10% from preflight is marked amber, more than 20% red.
         </p>
         <ResponsiveContainer width="100%" height={260}>
           <LineChart data={chart} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
@@ -304,8 +322,9 @@ function Fitness({ tests }) {
           </thead>
           <tbody>
             {tests.map((t) => {
+              // Same rule as on the Overview and the body map (see fitnessStatus).
               const pct = t.pct_vs_preflight;
-              const s = pct == null ? 'none' : pct < -20 ? 'critical' : pct < -10 ? 'warning' : 'ok';
+              const s = fitnessStatus(pct);
               return (
                 <tr key={t.id}>
                   <td>{t.label}{t.position === 'supine' ? ' (supine)' : ''}</td>
@@ -330,9 +349,10 @@ function Fitness({ tests }) {
 }
 
 // --- ECG (MEDB 1.6) ------------------------------------------------------------
-function Ecg({ ecgs }) {
+function Ecg({ ecgs, sex }) {
   if (!ecgs.length) return <p className="muted">No resting ECG recorded.</p>;
-  const limit = { pr_ms: [120, 200], qrs_ms: [70, 110], qtc_ms: [350, 450] };
+  // Normal ranges of the ECG intervals in ms; the QTc limit depends on sex.
+  const limit = ecgLimits(sex);
   const cell = (key, v) => {
     const [lo, hi] = limit[key];
     return <span className={`pill ${v < lo || v > hi ? 'warning' : 'ok'}`}>{v} ms</span>;

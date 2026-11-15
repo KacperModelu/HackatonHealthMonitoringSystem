@@ -1,4 +1,7 @@
 // Thin wrapper around the Express API (server/api.js).
+// Every call returns the parsed JSON, or throws an Error whose message is the
+// server's own `error` text, so screens can show it to the user as it is.
+// `fields` (form validation) lists the inputs to highlight. 204 = success, no body.
 async function request(method, url, body) {
   const res = await fetch(`/api${url}`, {
     method,

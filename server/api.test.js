@@ -22,6 +22,10 @@ before(async () => {
   const app = express();
   app.use('/api', createApi(db));
   server = app.listen(0);
+  // One test generates 40 people synchronously and blocks the event loop for a few
+  // seconds. With the default 5 s keep-alive the idle connection could be closed
+  // meanwhile and the next request would fail with ECONNRESET on a slow machine.
+  server.keepAliveTimeout = 120000;
   await new Promise((r) => server.once('listening', r));
   base = `http://127.0.0.1:${server.address().port}/api`;
 });
@@ -93,8 +97,23 @@ test('generate, read dashboard, tick a task, delete', async () => {
   assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
 });
 
-test('reference crew cannot be deleted', async () => {
-  assert.equal((await call('DELETE', '/crew/1')).status, 403);
+test('preloaded crew are hidden and their data is blocked', async () => {
+  const list = (await call('GET', '/crew')).body;
+  assert.ok(list.every((c) => c.createdInApp));
+  for (const p of ['dashboard', 'tasks', 'wellbeing', 'cognitive']) {
+    assert.equal((await call('GET', `/crew/1/${p}`)).status, 403, p);
+  }
+  assert.equal((await call('POST', '/crew/1/journal', { text: 'x' })).status, 403);
+});
+
+test('any profile can be deleted, including preloaded crew', async () => {
+  assert.equal((await call('DELETE', '/crew/1')).status, 204);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM crew_member WHERE id = 1').get().n, 0);
+  for (const t of ['vitals_reading', 'test_session', 'crew_assignment']) {
+    assert.equal(db.prepare(`SELECT COUNT(*) n FROM ${t} WHERE crew_id = 1`).get().n, 0, t);
+  }
+  assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
+  assert.equal((await call('DELETE', '/crew/1')).status, 404);
 });
 
 test('generated data is varied and deviations show up as alerts', () => {
@@ -149,6 +168,8 @@ test('psychological questionnaire, journal and cognitive results', async () => {
   const best = await call('POST', `/crew/${crewId}/psych`, { answers: [0, 0, 0, 10, 2, 10, 1, 0, 0, 5] });
   assert.equal(best.status, 201);
   assert.equal(best.body.score, 99);              // practice question gives 9 at best
+  assert.equal(best.body.max, 99);                // so the maximum is 99, not 100
+  assert.equal(best.body.percent, 100);
   assert.equal(best.body.belowThreshold, false);
 
   // Worst answers → below the 60 % threshold

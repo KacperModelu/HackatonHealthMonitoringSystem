@@ -4,6 +4,10 @@ import { api } from '../api.js';
 import { PSYCH_QUESTIONS, PSYCH_THRESHOLD } from '../assessments.js';
 
 // Psychological wellbeing: questionnaire, supportive activities, journal.
+// The tab is a small state machine. `view.name` says which screen is shown:
+//   home → quiz → result → (journal | breathing | meditation) → back
+// `view.from` remembers where an activity was opened from, so "Back" returns to the
+// result screen (keeping the score) or to the home screen.
 export default function Wellbeing({ crewId }) {
   const [view, setView] = useState({ name: 'home' });
   const [data, setData] = useState(null);
@@ -106,7 +110,9 @@ function ActivityButtons({ onActivity }) {
 
 // --- questionnaire -----------------------------------------------------------------
 function Questionnaire({ crewId, onCancel, onDone }) {
-  const [i, setI] = useState(0);
+  const [i, setI] = useState(0);   // index of the question on screen
+  // Sliders start in the middle (5); choice questions start unanswered (null) and
+  // must be answered before moving on.
   const [answers, setAnswers] = useState(() => PSYCH_QUESTIONS.map((q) => (q.slider ? 5 : null)));
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -127,6 +133,8 @@ function Questionnaire({ crewId, onCancel, onDone }) {
       setI(i + 1);
       return;
     }
+    // Last question: send the raw answers. The server scores them, saves the
+    // assessment and returns the result (score, percent, below threshold or not).
     setBusy(true);
     try {
       onDone(await api.submitPsych(crewId, answers));
@@ -234,8 +242,11 @@ function Journal({ crewId }) {
   );
 }
 
+// Seconds → "mm:ss"
 const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
+// Short 660 Hz tone from the Web Audio API (no sound file needed), so the end of an
+// exercise is noticed with closed eyes.
 function beep() {
   try {
     const ctx = new AudioContext();
@@ -248,6 +259,9 @@ function beep() {
 }
 
 // Countdown driven by wall-clock time; returns elapsed ms (null before start).
+// Elapsed time is always "now minus start", never a sum of ticks: browsers slow
+// timers down in background tabs, and counting ticks would make the exercise run long.
+// Each tick schedules the next one (every 200 ms) until the duration is reached.
 function useCountdown(durationMs) {
   const [elapsed, setElapsed] = useState(null);
   const start = useRef(0);
@@ -270,6 +284,8 @@ function Breathing() {
   const done = elapsed !== null && elapsed >= duration;
 
   // 4 s inhale, 4 s hold, 6 s exhale, 2 s pause.
+  // `s` is the position inside the 16-second cycle; phase = [text, seconds left in
+  // this phase, CSS class that grows or shrinks the circle].
   let phase = null;
   if (running) {
     const s = Math.floor(elapsed / 1000) % 16;

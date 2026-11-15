@@ -9,22 +9,31 @@ const RANKS = [
   ['Flight Engineer', 1100], ['Commander', 1500], ['Space Ace', 1900],
 ];
 
-const DAY = 86400000;
+const DAY = 86400000;   // milliseconds in a day
+// Moves a 'YYYY-MM-DD' date by n days. The date is parsed as UTC midnight, so the
+// arithmetic is pure calendar math and daylight-saving changes cannot shift a day.
 const shift = (isoDate, n) =>
   new Date(Date.parse(`${isoDate}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 
+// "Today" in the server's local time zone (not UTC): a task ticked at 00:30 local time
+// should count for the new day. Assessments, by contrast, store full UTC timestamps.
 export function localToday() {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// Everything the "Daily tasks" tab shows, computed from scratch on every request.
+// Nothing is cached or stored: un-ticking a task simply deletes its row and all the
+// numbers below follow. `today` is a parameter so tests can pin the date.
 export function computeSummary(db, crewId, today = localToday()) {
+  // One row per day with at least one completed task: points and task count that day.
   const days = db.prepare(
     `SELECT tc.completed_on AS day, SUM(t.points) AS points, COUNT(*) AS tasks
      FROM task_completion tc JOIN health_task t ON t.id = tc.task_id
      WHERE tc.crew_id = ? GROUP BY tc.completed_on ORDER BY tc.completed_on`,
   ).all(crewId);
+  // How many times each task was ever done, keyed by task code (used by the badges).
   const perTask = Object.fromEntries(db.prepare(
     `SELECT t.code, COUNT(*) AS n FROM task_completion tc JOIN health_task t ON t.id = tc.task_id
      WHERE tc.crew_id = ? GROUP BY t.code`,
@@ -49,6 +58,7 @@ export function computeSummary(db, crewId, today = localToday()) {
     d = shift(d, -1);
   }
 
+  // Best streak ever: walk the active days in order and count runs of consecutive dates.
   let bestStreak = 0;
   let run = 0;
   let prev = null;
@@ -59,9 +69,12 @@ export function computeSummary(db, crewId, today = localToday()) {
     prev = day;
   }
 
+  // Rank is based on a rolling 30-day window, not on lifetime points: it reflects the
+  // current habit and drops again if the person stops. All 8 tasks give 80 points a
+  // day (2400 per 30 days), so the top rank needs about 79% of the maximum.
   let monthPoints = 0;
   for (let i = 0; i < 30; i++) monthPoints += byDay.get(shift(today, -i)) ?? 0;
-  let idx = 0;
+  let idx = 0;   // highest rank whose threshold has been reached
   RANKS.forEach(([, min], i) => { if (monthPoints >= min) idx = i; });
   const rank = {
     name: RANKS[idx][0],
@@ -71,6 +84,7 @@ export function computeSummary(db, crewId, today = localToday()) {
     nextPoints: RANKS[idx + 1]?.[1] ?? null,
   };
 
+  // A badge is earned when `have` reaches `need`; progress is shown as "have / need".
   const badge = (icon, title, description, have, need) =>
     ({ icon, title, description, earned: have >= need, progress: `${Math.min(have, need)} / ${need}` });
 

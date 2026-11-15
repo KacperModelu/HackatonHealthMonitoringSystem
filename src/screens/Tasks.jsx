@@ -12,6 +12,8 @@ export default function Tasks({ crewId }) {
     api.tasks(crewId).then(setData).catch((e) => setError(e.message));
   }, [crewId]);
 
+  // The server answers with the complete, recalculated summary, so the points, streak,
+  // rank and badges on screen always match the database.
   const toggle = async (task, done) => {
     try {
       setData(await api.setTask(crewId, task.id, done));
@@ -24,6 +26,9 @@ export default function Tasks({ crewId }) {
   if (!data) return <p className="muted">Loading…</p>;
 
   const { summary: s, tasks, doneToday } = data;
+  // Widths of the progress bars: today's points against the daily goal, and how far
+  // the 30-day points are between the current rank's threshold and the next one.
+  // maxWeek scales the 7-day mini chart (at least as tall as the daily goal).
   const goalPct = Math.min(100, Math.round((100 * s.todayPoints) / s.dailyGoal));
   const rankPct = s.rank.nextPoints
     ? Math.round((100 * (s.rank.monthPoints - s.rank.minPoints)) / (s.rank.nextPoints - s.rank.minPoints))

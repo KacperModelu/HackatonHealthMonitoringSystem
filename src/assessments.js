@@ -39,6 +39,14 @@ export const PSYCH_QUESTIONS = [
 // Below this percentage the person is advised to contact support and offered activities.
 export const PSYCH_THRESHOLD = 60;
 
+// The maximum is the best total that can really be reached: 10 for a slider, the
+// highest-scoring option for a choice question (99 in total, because no answer to the
+// "self-regulating practice" question gives 10). So the best answers give 100%.
+export const PSYCH_MAX = PSYCH_QUESTIONS.reduce(
+  (sum, q) => sum + (q.slider ? 10 : Math.max(...q.points)), 0);
+
+// The single place where the questionnaire is scored: the server calls it before
+// saving, so the stored score never depends on what the browser claims.
 // answers[i] is the slider value (0–10) or the option index.
 // Returns { items: [{question, answer, points}], score, max, percent } or { error }.
 export function scorePsych(answers) {
@@ -57,11 +65,13 @@ export function scorePsych(answers) {
     }
   }
   const score = items.reduce((s, x) => s + x.points, 0);
-  const max = PSYCH_QUESTIONS.length * 10;
+  const max = PSYCH_MAX;
   return { items, score, max, percent: Math.round((1000 * score) / max) / 10 };
 }
 
 // --- cognitive tests ---------------------------------------------------------------
+// `code` is what is stored in cognitive_result.test, `max` the highest possible score
+// (the server rejects anything above it), `intro` the instructions shown before the start.
 export const COGNITIVE_TESTS = [
   { code: 'reaction', name: 'Reaction Time', label: 'Reaction Time (5 trials)', max: 5,
     intro: 'Five successful trials. Wait until CLICK NOW appears, then click as quickly as possible. Early clicks must be retried.' },
@@ -79,6 +89,9 @@ export const COGNITIVE_TESTS = [
 
 export const testByCode = (code) => COGNITIVE_TESTS.find((t) => t.code === code);
 
+// Number matrices: every row follows the same rule (the third number is the sum of
+// the first two, or each number is double the previous one). '?' is the missing
+// bottom-right cell.
 export const MATRIX_QUESTIONS = [
   { prompt: [[1, 2, 3], [2, 4, 6], [3, 6, '?']], options: ['7', '8', '9', '12'], correct: '9' },
   { prompt: [[2, 3, 5], [4, 5, 9], [6, 7, '?']], options: ['11', '12', '13', '14'], correct: '13' },

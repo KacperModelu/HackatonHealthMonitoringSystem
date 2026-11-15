@@ -18,7 +18,11 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+# "Today" is frozen, not read from the clock: together with the fixed seed below it
+# makes the output identical on every run (anything dated after TODAY is not generated).
 TODAY = date(2026, 11, 14)
+# The one random generator for all crew data. Every call advances its state, so adding,
+# removing or reordering rng calls changes all data generated after that point.
 rng = random.Random(2026)
 
 
@@ -55,6 +59,11 @@ REQUIREMENTS = [
      30, "All U.S. crewmembers", "2017-07-24"),
 ]
 
+# When each test must happen. `anchor` says what the day numbers count from: launch
+# (negative = days before launch, "L-"), return ("R+" / "R-"), flight_day ("FD") or
+# annual. min/max is the allowed window in days, flex the tolerance (± days),
+# duration the crew time in minutes. The ids are referenced by the generators
+# (Python below and server/generator.js), so they must not be renumbered.
 # id, req, phase, activity, label, anchor, min, max, flex, duration, personnel, location, notes
 SCHEDULE = [
     (1, 1, "preflight", "Resting ECG", "L-9/6 m to L-10 d", "launch", -270, -10, None, 15,
@@ -111,6 +120,11 @@ LIGHT = [45] + list(range(60, 301, 15))       # 45, 60 ... 300 W
 
 
 def protocol_rows():
+    """Rows of protocol_stage: (protocol, stage no, kind, watts, seconds, elapsed seconds).
+
+    Both protocols have the same shape: 3 min of rest (stage 0), a 3-minute first
+    workload, then a higher workload every minute, and a 3-minute cool-down (stage 99).
+    """
     rows = []
     for name, loads in (("nominal", NOMINAL), ("light", LIGHT)):
         rows.append((name, 0, "rest", 0, 180, 180))
@@ -123,6 +137,8 @@ def protocol_rows():
     return rows
 
 
+# Reasons for ending a test: id, requirement, description, 1 = a medical reason.
+# Number 7 (volitional fatigue) is the normal end of a maximal test.
 TERMINATION = [
     (1, 2, "Onset of symptoms consistent with angina pectoris", 1),
     (2, 2, "Sustained ventricular tachycardia (7 or more sequential complexes)", 1),
@@ -186,6 +202,9 @@ EQUIPMENT = [
     (2, "inflight", "Countermeasures Software (CMSS)", "software"),
 ]
 
+# Limits behind the green / amber / red colours in the app and the v_vitals_alerts
+# view. These are general adult clinical values, NOT taken from the NASA documents.
+# parameter, unit, normal low, normal high, critical low, critical high, note
 REFERENCE_RANGES = [
     ("systolic_mmhg", "mmHg", 90, 130, 70, 160, "Resting systolic blood pressure"),
     ("diastolic_mmhg", "mmHg", 60, 85, 45, 100, "Resting diastolic blood pressure"),
@@ -300,8 +319,9 @@ GUIDE = [
      "gases are recorded throughout.",
      "Without gravity the heart and muscles work less and lose fitness. VO2peak usually drops "
      "most in the first weeks of flight; regular hard exercise limits the loss.",
-     "A drop of more than 15 % from your preflight value: discuss your exercise prescription "
-     "with the exercise physiologist.", 2),
+     "A drop of more than 10 % from your preflight value (amber): discuss your exercise "
+     "prescription with the exercise physiologist. More than 20 % (red): contact the "
+     "flight surgeon.", 2),
     ("ecg", "Resting ECG", 7,
      "An electrocardiogram records the heart's electrical activity using 10 electrodes "
      "(12 leads). It shows heart rhythm and how signals travel through the heart.",
@@ -314,7 +334,12 @@ GUIDE = [
 
 
 def add_gamification(db, crew_ids_by_mission, today):
-    """Synthetic task history: completions during and after each mission."""
+    """Synthetic task history: completions during and after each mission.
+
+    For every day from launch until `today`, each task is done with its base
+    probability times the person's diligence (lower after the mission). This gives
+    the reference crew realistic streaks, ranks and badges.
+    """
     g = random.Random(4242)          # separate RNG keeps the rest of the data unchanged
     task_ids = {code: i for i, (code, *_rest) in enumerate(HEALTH_TASKS, start=1)}
     # How likely each task is done on a given day, for an average crew member.
@@ -380,6 +405,14 @@ PHASE_HR_REST = {9: -6, 11: -3, 12: -2, 13: -2, 14: -2, 15: 9, 16: 2}
 
 
 class Builder:
+    """Writes the synthetic crew data.
+
+    For each person it keeps a personal baseline (their own normal values) and
+    derives every test and reading from it, so one person's data is consistent
+    across the whole database. server/generator.js is a JavaScript port of the
+    same model for people added in the app.
+    """
+
     def __init__(self, db):
         self.db = db
         self.session_id = 0
@@ -404,6 +437,7 @@ class Builder:
 
     def add_crew(self):
         for i, (fn, ln, sex, birth, h, w, agency, cyclist) in enumerate(CREW, start=1):
+            # N3.07: people under 65 kg use the lighter workloads, unless they cycle regularly.
             protocol = "light" if (w < 65 and not cyclist) else "nominal"
             self.db.execute("INSERT INTO crew_member VALUES (?,?,?,?,?,?,?,?,?,?,0)",
                             (i, fn, ln, sex, birth, h, w, agency, protocol, cyclist))
@@ -429,9 +463,16 @@ class Builder:
     def cycle_test(self, crew_id, mission_id, sp_id, d, position, location, analyzer,
                    status="completed", termination=7, maximal=1, notes=None,
                    vo2_factor=1.0, inflight=False):
+        """One graded exercise test: session row, per-stage rows, summary and blood pressures.
+
+        vo2_factor scales fitness for this test (e.g. a slow change between annual
+        tests); maximal=0 simulates an effort that was not truly maximal.
+        """
         c = self.crew[crew_id]
         sid = self.new_session(crew_id, mission_id, sp_id, d, position, location, analyzer,
                                status, termination, maximal, notes)
+        # True VO2peak on this day: baseline minus the average loss for this phase,
+        # scaled by the personal responder factor for in-flight and postflight tests.
         weight = c["weight"] * PHASE_WEIGHT.get(sp_id, 1.0) * rng.uniform(0.99, 1.01)
         mult = PHASE_VO2.get(sp_id, 1.0)
         loss = (1 - mult) * (c["responder"] if sp_id in (11, 12, 13, 14, 15, 16) else 1)
@@ -439,6 +480,8 @@ class Builder:
         if not maximal:
             vo2peak *= rng.uniform(0.86, 0.92)
 
+        # Highest workload the person can reach. ACSM: VO2 = 10.8 * watts / kg + 7
+        # (ml/kg/min), solved here for watts. All stages up to it are completed.
         loads = NOMINAL if c["protocol"] == "nominal" else LIGHT
         target_w = (vo2peak - 7) * weight / 10.8            # ACSM leg cycling equation
         if inflight:
@@ -454,6 +497,7 @@ class Builder:
         if inflight and peak_w == 350:
             exercise_sec += 120
 
+        # Peak heart rate falls with age (Tanaka formula: 208 - 0.7 * age).
         age = self.age_on(c, d)
         hr_rest = c["hr_rest"] + PHASE_HR_REST.get(sp_id, 0) + rng.randint(-3, 3)
         hr_peak = round(208 - 0.7 * age + c["hr_max_offset"] + rng.uniform(-3, 3))
@@ -464,6 +508,8 @@ class Builder:
         if sp_id == 15:
             hr_peak += rng.randint(0, 5)
 
+        # No gas analyser = no VO2 values (NULL). RER >= 1.10 marks a maximal effort;
+        # RPE is the Borg 6-20 scale, recorded on the ground only.
         has_gas = analyzer is not None
         vo2_rest = 3.5
         vt_frac = c["vt_frac"] * (0.93 if sp_id == 15 else 1.0) * rng.uniform(0.97, 1.03)
@@ -548,6 +594,7 @@ class Builder:
             qtc, finding, abnormal = 468 if c["sex"] == "F" else 458, "Borderline prolonged QTc", 1
         elif special == "earlyrep":
             finding = "Early repolarization pattern, normal variant"
+        # Bazett: QTc = QT / sqrt(RR), RR = 60 / heart rate; solved for the raw QT.
         qt = round(qtc * math.sqrt(60 / hr))
         report = d + timedelta(days=rng.randint(2, 5))
         self.db.execute("INSERT INTO ecg_result VALUES (?,?,?,?,?,?,?,?,?,?,?)",
@@ -558,6 +605,12 @@ class Builder:
     # -- in-flight vitals --------------------------------------------------------
 
     def vitals(self, crew_id, mission_id, launch, ret, events):
+        """Two readings a day (06:xx and 19:xx) for the whole flight.
+
+        Healthy value = personal baseline + adaptation to weightlessness + daily
+        rhythm + noise. `events` is a list of (kind, first flight day, last flight
+        day); an active event shifts several vitals together.
+        """
         c = self.crew[crew_id]
         days = (ret - launch).days
         rows = []
@@ -615,10 +668,16 @@ ECG_TEXT = {
 
 
 def jitter(d, flex):
+    """Moves a date by a random number of days within the schedule tolerance (± flex)."""
     return d + timedelta(days=rng.randint(-flex, flex)) if flex else d
 
 
 def build(path):
+    """Creates the database from scratch: schema, reference data, then crew data.
+
+    WARNING: an existing file is deleted first, including every user, questionnaire
+    and journal entry added through the app.
+    """
     if path.exists():
         path.unlink()
     db = sqlite3.connect(path)
@@ -644,6 +703,8 @@ def build(path):
     db.executemany("INSERT INTO mission VALUES (?,?,?,?)", MISSIONS)
 
     # Special cases so the analysis views have something to show.
+    # Keys are (crew id, "pre" | "post" flight ECG); events are (kind, first day, last day).
+    # These are hand-picked, not random, so the same people always have the same findings.
     ecg_special = {(2, "pre"): "avb1", (7, "post"): "pvc", (5, "pre"): "rbbb",
                    (12, "post"): "qtc", (4, "pre"): "earlyrep", (11, "post"): "pvc"}
     mission_wide_events = {
@@ -655,6 +716,9 @@ def build(path):
         5: [("brady", 60, 75)],
     }
 
+    # Each mission flies three people: crew ids 1-3 on HMS-1, 4-6 on HMS-2, and so on.
+    # For every person the full N3.07 / MEDB 1.6 timeline is generated in order:
+    # annual test → preflight tests and ECG → in-flight tests → postflight ECG and tests.
     for idx, (mid, name, launch_s, ret_s) in enumerate(MISSIONS):
         launch, ret = date.fromisoformat(launch_s), date.fromisoformat(ret_s)
         crew_ids = [idx * 3 + k + 1 for k in range(3)]
@@ -762,6 +826,7 @@ def build(path):
 
 
 def main():
+    # Optional first argument = output file; afterwards print a row count per table.
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE / "cardio_analysis.db"
     db = build(out)
     print(f"Created {out}")

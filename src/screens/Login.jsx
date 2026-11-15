@@ -3,11 +3,16 @@ import { api } from '../api.js';
 import { go } from '../router.js';
 
 // Login screen: choose an astronaut, log in, add or delete a user.
+// There are no passwords: "Log in" just opens the chosen person's dashboard.
+// The list contains only profiles created in the app; the preloaded reference crew
+// is filtered out by the server (GET /api/crew).
 export default function Login({ selected }) {
-  const [crew, setCrew] = useState(null);
-  const [current, setCurrent] = useState('');
+  const [crew, setCrew] = useState(null);       // null = still loading
+  const [current, setCurrent] = useState('');   // id of the chosen person, as a string (<select> value)
   const [error, setError] = useState('');
 
+  // Loads the list and chooses who is selected: the requested id if it still
+  // exists (e.g. the person just created), otherwise the first one.
   const load = async (select) => {
     try {
       const list = await api.crew();
@@ -34,8 +39,6 @@ export default function Login({ selected }) {
     }
   };
 
-  const reference = crew?.filter((c) => !c.createdInApp) ?? [];
-  const added = crew?.filter((c) => c.createdInApp) ?? [];
   const option = (c) => (
     <option key={c.id} value={c.id}>
       {c.name}{c.mission ? ` · ${c.mission}` : ''}
@@ -54,8 +57,7 @@ export default function Login({ selected }) {
           <span>Choose an astronaut:</span>
           <select value={current} onChange={(e) => setCurrent(e.target.value)} disabled={!crew?.length}>
             {crew && !crew.length && <option value="">No astronauts yet</option>}
-            {added.length > 0 && <optgroup label="Added in the app">{added.map(option)}</optgroup>}
-            {reference.length > 0 && <optgroup label="Preloaded NASA data">{reference.map(option)}</optgroup>}
+            {crew?.map(option)}
           </select>
         </label>
         {person && (
@@ -72,12 +74,7 @@ export default function Login({ selected }) {
             Log in
           </button>
           <button onClick={() => go('/new')}>Add user</button>
-          <button
-            className="danger"
-            disabled={!person?.createdInApp}
-            title={person && !person.createdInApp ? 'Only original users can be removed' : undefined}
-            onClick={remove}
-          >
+          <button className="danger" disabled={!person} onClick={remove}>
             Delete user
           </button>
         </div>

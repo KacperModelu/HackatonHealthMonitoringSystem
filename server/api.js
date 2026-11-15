@@ -5,28 +5,50 @@ import { generate, validatePerson } from './generator.js';
 import { computeSummary, localToday } from './gamification.js';
 import { COGNITIVE_TESTS, PSYCH_THRESHOLD, scorePsych, testByCode } from '../src/assessments.js';
 
+// Current time as an ISO string in UTC, cut to whole seconds: 2026-11-15T10:42:07Z
 const nowIso = () => new Date().toISOString().slice(0, 19) + 'Z';
 
+// Age in full years on `today`. Both dates are 'YYYY-MM-DD' strings; one year is
+// subtracted when this year's birthday has not happened yet.
 const ageFrom = (birth, today = localToday()) => {
   const [by, bm, bd] = birth.split('-').map(Number);
   const [ty, tm, td] = today.split('-').map(Number);
   return ty - by - (tm < bm || (tm === bm && td < bd) ? 1 : 0);
 };
 
+// Builds the router with every /api endpoint. The database handle is passed in (not
+// imported), so the tests can run the same API on a temporary copy of the database.
+// There is no authentication: "logging in" only means choosing a profile on the login
+// screen, and every endpoint trusts the crew id in the URL.
 export function createApi(db) {
   const api = express.Router();
-  api.use(express.json());
+  api.use(express.json());   // parse JSON request bodies into req.body
 
   const crewExists = (id) => db.prepare('SELECT 1 FROM crew_member WHERE id = ?').get(id);
+
+  // Preloaded (reference NASA) crew stay in the database for the reference tables,
+  // but nobody can view their health data. DELETE is allowed for every profile.
+  // api.param runs before any route that has ":id" in its path, so this one check
+  // covers dashboard, tasks, wellbeing, journal and cognitive endpoints at once.
+  // Unknown ids fall through: each route then answers 404 itself.
+  api.param('id', (req, res, next, raw) => {
+    if (req.method === 'DELETE') return next();
+    const row = db.prepare('SELECT created_in_app FROM crew_member WHERE id = ?').get(Number(raw));
+    if (row && row.created_in_app !== 1) {
+      return res.status(403).json({ error: 'Preloaded users are not accessible.' });
+    }
+    next();
+  });
 
   // --- crew list (login screen) --------------------------------------------------
   api.get('/crew', (_req, res) => {
     const rows = db.prepare(
-      // db query ask
+      // Only profiles created in the app are listed. The subquery picks the name of
+      // each person's most recent mission (NULL when they have none).
       `SELECT c.id, c.first_name, c.last_name, c.sex, c.birth_date, c.created_in_app,
               (SELECT m.name FROM crew_assignment a JOIN mission m ON m.id = a.mission_id
                WHERE a.crew_id = c.id ORDER BY m.launch_date DESC LIMIT 1) AS mission
-       FROM crew_member c ORDER BY c.created_in_app, c.last_name, c.first_name`,
+       FROM crew_member c WHERE c.created_in_app = 1 ORDER BY c.last_name, c.first_name`,
     ).all();
     res.json(rows.map((r) => ({
       id: r.id,
@@ -39,6 +61,9 @@ export function createApi(db) {
   });
 
   // --- "Generate user data" ------------------------------------------------------
+  // 400 = the form input is wrong (`fields` names the inputs to highlight),
+  // 201 = profile and full fake health record created, 500 = generation failed
+  // (the transaction in generate() has then rolled everything back).
   api.post('/crew', (req, res) => {
     const { person, error, fields } = validatePerson(req.body);
     if (error) return res.status(400).json({ error, fields });
@@ -49,14 +74,13 @@ export function createApi(db) {
     }
   });
 
-  // --- delete user (only people created in the app; reference crew stays) --------
+  // --- delete user (any profile, including preloaded reference crew) -------------
   api.delete('/crew/:id', (req, res) => {
     const id = Number(req.params.id);
-    const crew = db.prepare('SELECT created_in_app FROM crew_member WHERE id = ?').get(id);
-    if (!crew) return res.status(404).json({ error: 'No such crew member.' });
-    if (crew.created_in_app !== 1) {
-      return res.status(403).json({ error: 'Only users added in the app can be deleted.' });
-    }
+    if (!crewExists(id)) return res.status(404).json({ error: 'No such crew member.' });
+    // The schema has no ON DELETE CASCADE, so rows are removed by hand, children
+    // before parents (foreign keys are enforced): results of test sessions → the
+    // person's own rows → the person → missions nobody uses any more.
     transaction(db, () => {
       const sessions = 'SELECT id FROM test_session WHERE crew_id = ?';
       for (const t of ['ecg_result', 'cycle_test_result', 'stage_measurement', 'bp_measurement']) {
@@ -86,6 +110,9 @@ export function createApi(db) {
   });
 
   // --- dashboard data -----------------------------------------------------------
+  // One request returns everything the Overview, Vitals, Fitness and ECG tabs need.
+  // In-flight vitals belong to one mission (?mission=<id>, default: the latest one);
+  // fitness tests and ECGs are returned for the person's whole history.
   api.get('/crew/:id/dashboard', (req, res) => {
     const id = Number(req.params.id);
     const c = db.prepare('SELECT * FROM crew_member WHERE id = ?').get(id);
@@ -116,6 +143,9 @@ export function createApi(db) {
        WHERE s.crew_id = ? ORDER BY s.session_date`,
     ).all(id));
     // % change of VO2peak vs. the upright L-90/30 d test of the same mission
+    // (the last preflight test is each person's own baseline; the supine test and
+    // tests without gas analysis cannot serve as one). Rounded to one decimal.
+    // The same calculation exists in SQL as the v_vo2_trend view.
     for (const t of tests) {
       const base = tests.find((b) => b.mission_id === t.mission_id && b.label === 'L-90/30 d'
         && b.position !== 'supine' && b.vo2peak_ml_kg_min);
@@ -161,6 +191,8 @@ export function createApi(db) {
   });
 
   // --- daily tasks / gamification -----------------------------------------------
+  // Task list + ids ticked today + points/streak/rank/badges. Returned by both the
+  // GET and the POST below, so the screen refreshes from a single response.
   const tasksPayload = (id, today) => ({
     tasks: plain(db.prepare('SELECT * FROM health_task ORDER BY sort_order').all()),
     doneToday: plain(db.prepare(
@@ -183,6 +215,8 @@ export function createApi(db) {
       return res.status(404).json({ error: 'No such task.' });
     }
     const today = localToday();
+    // Tick = insert a row, un-tick = delete it. INSERT OR IGNORE plus the UNIQUE
+    // (crew, task, day) constraint makes a double click harmless.
     if (req.body?.done) {
       db.prepare(
         `INSERT OR IGNORE INTO task_completion (crew_id, task_id, completed_on, created_in_app)
@@ -220,8 +254,11 @@ export function createApi(db) {
   api.post('/crew/:id/psych', (req, res) => {
     const id = Number(req.params.id);
     if (!crewExists(id)) return res.status(404).json({ error: 'No such crew member.' });
+    // The browser sends only the raw answers; the score is computed here with the
+    // same shared function (src/assessments.js), so it cannot be faked by the client.
     const result = scorePsych(req.body?.answers);
     if (result.error) return res.status(400).json({ error: result.error });
+    // Summary row + one row per answer + the daily task: all or nothing.
     const assessmentId = transaction(db, () => {
       const aid = Number(db.prepare(
         'INSERT INTO psych_assessment (crew_id, taken_at, score, max_score, percent) VALUES (?,?,?,?,?)',
@@ -268,6 +305,9 @@ export function createApi(db) {
     if (!test) {
       return res.status(400).json({ error: `Unknown test (expected ${COGNITIVE_TESTS.map((t) => t.code).join(', ')}).` });
     }
+    // Unlike the questionnaire, cognitive tests run entirely in the browser (they
+    // depend on timing), so the server cannot recompute them. It only checks that
+    // the reported numbers are possible for the given test.
     const num = (v, lo, hi) => (Number.isFinite(v) && v >= lo && v <= hi ? v : undefined);
     const row = { correct: null, avg: null, falseStarts: null, duration: null };
     if (test.code === 'reaction') {
@@ -299,6 +339,8 @@ export function createApi(db) {
     res.json(rows.map((r) => ({ ...r, how_to_measure: r.how_to_measure.split('|') })));
   });
 
+  // Last resort: any error thrown in a route above ends up here as a JSON 500
+  // (Express recognises an error handler by its four arguments).
   api.use((err, _req, res, _next) => {
     console.error(err);
     res.status(500).json({ error: err.message });

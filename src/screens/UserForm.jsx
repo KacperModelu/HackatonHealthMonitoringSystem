@@ -16,6 +16,7 @@ export default function UserForm() {
   const [invalid, setInvalid] = useState([]);   // fields to highlight
   const [result, setResult] = useState(null);
 
+  // Returns the change handler of one field; typing in a field clears its red highlight.
   const set = (key) => (e) => {
     setForm({ ...form, [key]: e.target.value });
     setInvalid(invalid.filter((k) => k !== key));
@@ -24,10 +25,10 @@ export default function UserForm() {
   const req = (key) => ({ value: form[key], onChange: set(key), required: true, 'aria-invalid': invalid.includes(key) });
 
   const submit = async (e) => {
-    e.preventDefault();
+    e.preventDefault();   // stay on the page; the request is sent by the code below
 
-    
-    // All fields are required (the server checks this too).
+    // All fields are required (the server checks this too). Ranges (age 18–99 etc.)
+    // are checked only by the server, which answers with the message and the field.
     const missing = Object.keys(LABELS).filter((k) => !form[k].trim());
     if (missing.length) {
       setInvalid(missing);
@@ -46,6 +47,8 @@ export default function UserForm() {
     }
   };
 
+  // After a successful generation the form is replaced by a summary of what was
+  // created, including which deviations from the norm were simulated.
   if (result) {
     return (
       <main className="center-screen">

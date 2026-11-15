@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { COGNITIVE_TESTS, MATRIX_QUESTIONS, SPATIAL_QUESTIONS, SYMBOLS, testByCode } from '../assessments.js';
 
-const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));   // integer in [a, b]
+// Returns a shuffled copy (Fisher–Yates); the original array is left untouched.
 const shuffle = (arr) => {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -13,12 +14,17 @@ const shuffle = (arr) => {
 };
 
 // setTimeout that is cancelled when the component unmounts.
+// Without it, leaving a test halfway would let a pending timer change the state of
+// a screen that no longer exists.
 function useTimeouts() {
   const ids = useRef([]);
   useEffect(() => () => ids.current.forEach(clearTimeout), []);
   return (fn, ms) => { ids.current.push(setTimeout(fn, ms)); };
 }
 
+// One-line summary of a result. It accepts both shapes: a row from the database
+// (snake_case: avg_reaction_ms) and a result just produced in the browser
+// (camelCase: avgReactionMs).
 const summaryOf = (r) => {
   if (r.test === 'reaction') {
     return `Average ${Math.round(r.avg_reaction_ms ?? r.avgReactionMs)} ms · ${r.false_starts ?? r.falseStarts} false starts`;
@@ -39,6 +45,8 @@ export default function Cognitive({ crewId }) {
   const load = () => api.cognitive(crewId).then(setHistory).catch((e) => setError(e.message));
   useEffect(() => { load(); }, [crewId]);
 
+  // Show the result at once, then save it; a failed save is reported but the
+  // person still sees their score.
   const finish = async (r) => {
     setResult(r);
     try {
@@ -97,6 +105,8 @@ export default function Cognitive({ crewId }) {
   );
 }
 
+// Shows the instructions first, then mounts the component of the chosen test.
+// Every test reports through onFinish({ test, correct | avgReactionMs…, details }).
 function TestRunner({ code, intro, onFinish }) {
   const [started, setStarted] = useState(false);
   if (!started) {
@@ -117,10 +127,11 @@ function Reaction({ onFinish }) {
   const [times, setTimes] = useState([]);
   const [falseStarts, setFalseStarts] = useState(0);
   const [msg, setMsg] = useState('Press the button to start the first trial.');
-  const signal = useRef(0);
-  const shownAt = useRef(0);
+  const signal = useRef(0);    // number of the current trial; lets a cancelled trial's timer be ignored
+  const shownAt = useRef(0);   // when "CLICK NOW!" appeared (performance.now() is sub-millisecond)
   const later = useTimeouts();
 
+  // Wait a random 1.5–3.5 s (so the moment cannot be anticipated), then show the signal.
   const nextTrial = () => {
     setStage('waiting');
     setMsg('WAIT...');
@@ -135,6 +146,8 @@ function Reaction({ onFinish }) {
 
   const click = () => {
     if (stage === 'between') return nextTrial();
+    // Clicked before the signal: a false start. Bumping the trial number makes the
+    // timer of this trial do nothing when it fires; the trial is repeated.
     if (stage === 'waiting') {
       signal.current++;
       setFalseStarts(falseStarts + 1);
@@ -182,6 +195,8 @@ function Memory({ onFinish }) {
   const [log, setLog] = useState({ correct: 0, details: [] });
   const later = useTimeouts();
 
+  // Round r (0–4) shows r + 3 random digits (3 to 7) for 2 s + 0.4 s per round,
+  // then hides them and asks for the answer.
   const show = (r) => {
     const seq = Array.from({ length: r + 3 }, () => randInt(0, 9)).join('');
     setDigits(seq);
@@ -232,6 +247,9 @@ function Memory({ onFinish }) {
 }
 
 // --- 2-back working memory --------------------------------------------------------
+// Builds the 12 digits. Positions 4, 6, 9 and 11 (indexes 3, 5, 8, 10) always repeat
+// the digit two places earlier; every other position is forced to differ. So each run
+// has exactly 4 "same" and 6 "different" answers, always at the same positions.
 function makeTwoBack() {
   const d = [];
   for (let i = 0; i < 12; i++) {
@@ -252,6 +270,9 @@ function TwoBack({ onFinish }) {
   const [log, setLog] = useState({ correct: 0, details: [] });
   const later = useTimeouts();
 
+  // Each digit is visible for 0.9 s. The first two cannot be compared with anything,
+  // so they advance on their own after a short gap; from the third on, the digit is
+  // hidden and the person answers.
   useEffect(() => {
     setStage('showing');
     later(() => {
@@ -295,6 +316,8 @@ function TwoBack({ onFinish }) {
 }
 
 // --- matrix reasoning & spatial orientation --------------------------------------------
+// Shared engine for multiple-choice tests: one question at a time, pick an option,
+// submit. `render` draws the question itself (a matrix table or a sentence).
 function ChoiceTest({ code, questions, render, onFinish }) {
   const [i, setI] = useState(0);
   const [choice, setChoice] = useState(null);
@@ -355,7 +378,10 @@ function Spatial({ onFinish }) {
 function Symbols({ onFinish }) {
   const [round, setRound] = useState(0);
   const [digit, setDigit] = useState(() => randInt(1, 5));
-  const [now, setNow] = useState(0);
+  const [now, setNow] = useState(0);   // elapsed ms, only for the "time left" display
+  // Refs instead of state: the keyboard listener and the timer below must always see
+  // the newest values, and `done` makes sure the result is reported exactly once
+  // (the 10th answer and the 60-second limit can happen almost together).
   const log = useRef({ correct: 0, details: [] });
   const start = useRef(performance.now());
   const done = useRef(false);

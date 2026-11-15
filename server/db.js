@@ -10,6 +10,12 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 export const defaultDbPath = path.resolve(here, '../database/cardio_analysis.db');
 
+// Opens the database and makes sure it is usable:
+//   1. the file must exist (it is built by the Python script, never created empty here),
+//   2. foreign keys are switched on (SQLite leaves them off by default, per connection),
+//   3. tables added after the first version are created if missing, so older copies of
+//      the file keep working without a separate migration step.
+// CARDIO_DB lets you point the app at a copy, so experiments do not touch the tracked file.
 export function openDb(file = process.env.CARDIO_DB || defaultDbPath) {
   if (!existsSync(file)) {
     throw new Error(
@@ -75,6 +81,9 @@ CREATE INDEX IF NOT EXISTS idx_psych_crew     ON psych_assessment(crew_id, taken
 CREATE INDEX IF NOT EXISTS idx_cognitive_crew ON cognitive_result(crew_id, test, taken_at);`;
 
 // Runs fn inside a transaction; rolls back if it throws.
+// node:sqlite is synchronous, so nothing else can run between BEGIN and COMMIT:
+// a generated profile (hundreds of rows in many tables) is stored fully or not at all.
+// Not re-entrant: do not call transaction() from inside fn.
 export function transaction(db, fn) {
   db.exec('BEGIN');
   try {

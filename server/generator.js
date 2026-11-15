@@ -97,9 +97,14 @@ const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 //   deviations → vitals(), cycleTests() and ecgs() write data that already contains
 //   them → the chosen deviations are saved to simulated_event as ground truth.
 class Generator {
-  constructor(db, person, { rand, today } = {}) {
+  // options.outlier = { kinds: [...KINDS], ecg?: 'avb1' | 'qtc' | 'pvc' } builds a strong
+  // outlier instead of a random profile: exactly these deviations, at a severity that
+  // reaches the red (critical) ranges, lasting until the final flight day so they are
+  // still visible in the latest reading. Used by server/seed-outliers.js.
+  constructor(db, person, { rand, today, outlier } = {}) {
     this.db = db;
     this.p = person;
+    this.outlier = outlier ?? null;
     this.r = makeRandom(rand);
     this.today = today ? toDate(today) : toDate(iso(new Date()));
   }
@@ -194,6 +199,9 @@ class Generator {
     // Shuffle and take the first `count`: no kind is picked twice.
     const pool = shuffle([...KINDS]);
     const d = this.duration;
+    // Outlier profile: the requested kinds replace the random choice.
+    const strong = !!this.outlier;
+    const chosen = strong ? this.outlier.kinds.filter((k) => KINDS.includes(k)) : pool.slice(0, count);
     // Random window of minLen–maxLen flight days that fits inside the mission and
     // avoids its first days (when the body is still adapting anyway).
     const span = (minLen, maxLen, earliest = 0.05) => {
@@ -207,8 +215,8 @@ class Generator {
     this.ecgSpecial = null;
     this.testStopped = false;
 
-    for (const kind of pool.slice(0, count)) {
-      const e = { kind, start: 0, end: 0 };
+    for (const kind of chosen) {
+      const e = { kind, start: 0, end: 0, strong };
       switch (kind) {
         case 'hypertension': {
           const start = randint(Math.floor(d * 0.4), Math.floor(d * 0.7));
@@ -256,12 +264,16 @@ class Generator {
           break;
         }
         case 'deconditioning':
-          this.responder = uni(1.8, 2.1);
+          this.responder = strong ? uni(2.7, 3.0) : uni(1.8, 2.1);
+          // Severe: fitness does not recover after landing either (at least 25% down
+          // in every test from FD 14 on, including R+30), so the latest test stays red.
+          if (strong) this.minLoss = uni(0.25, 0.3);
           e.code = 'deconditioning';
-          e.text = 'Strong loss of aerobic fitness in flight (VO2peak down ~25–30%)';
+          e.text = strong ? 'Loss of aerobic fitness in flight (VO2peak down ~40%)'
+            : 'Strong loss of aerobic fitness in flight (VO2peak down ~25–30%)';
           break;
         case 'ecg': {
-          const type = ['avb1', 'qtc', 'pvc'][randint(0, 2)];
+          const type = this.outlier?.ecg ?? ['avb1', 'qtc', 'pvc'][randint(0, 2)];
           this.ecgSpecial = type;
           e.code = `ecg_${type}`;
           e.text = type === 'avb1' ? 'First-degree AV block on postflight ECG'
@@ -276,6 +288,12 @@ class Generator {
           break;
         default:
           break;
+      }
+      if (strong) {
+        // Episodes with a flight-day window start 25–40 days before landing and run
+        // to the last flight day, so the latest reading still shows them.
+        if (e.start) [e.start, e.end] = [d - randint(25, 40), d];
+        e.text = `SEVERE – ${e.text}`;
       }
       this.events.push(e);
     }
@@ -319,40 +337,44 @@ class Generator {
         // the pattern and not only a single value out of range.
         for (const e of episodes) {
           if (!e.start || fd < e.start || fd > e.end) continue;
+          const S = e.strong;
           switch (e.kind) {
             case 'hypertension': {
               // A trend, not a jump: k grows from 0 to 1 across the window.
+              // The `S ? … : …` values below are the outlier (severe) versions: large
+              // enough to leave the amber band and reach the red, critical range.
               const k = (fd - e.start) / Math.max(e.end - e.start, 1);
-              sbp += 12 + 16 * k;
-              dbp += 7 + 9 * k;
+              sbp += S ? 30 + 35 * k : 12 + 16 * k;
+              dbp += S ? 16 + 18 * k : 7 + 9 * k;
               break;
             }
             case 'hypotension':
-              sbp -= 20 + uni(0, 6);
-              dbp -= 10 + uni(0, 4);
-              hr += 8;
+              // Severe: capped below 70/45 mmHg (the red limit) whatever the baseline.
+              sbp = S ? Math.min(sbp - 45, 58 + uni(0, 8)) : sbp - 20 - uni(0, 6);
+              dbp = S ? Math.min(dbp - 24, 36 + uni(0, 6)) : dbp - 10 - uni(0, 4);
+              hr += S ? 18 : 8;
               break;
             case 'tachycardia':
-              hr = 102 + uni(0, 18) + (evening ? 5 : 0);   // resting HR > 100
-              resp += 1.5;
+              hr = (S ? 135 : 102) + uni(0, 18) + (evening ? 5 : 0);   // resting HR > 100 (severe: > 130)
+              resp += S ? 4 : 1.5;
               break;
             case 'bradycardia':
-              hr -= 13;
+              hr = S ? Math.min(hr - 13, 33 + uni(0, 6)) : hr - 13;     // severe: below 40
               break;
             case 'fever':
-              skin += 1.5 + uni(0, 0.5);
-              hr += 14;
-              resp += 2.5;
+              skin += S ? 3.2 + uni(0, 0.8) : 1.5 + uni(0, 0.5);
+              hr += S ? 28 : 14;
+              resp += S ? 6 : 2.5;
               break;
             case 'co2':
-              resp += 4.5 + uni(0, 1.5);
-              spo2 -= 2.3 + uni(0, 1.2);
-              hr += 6;
+              resp += S ? 10 + uni(0, 3) : 4.5 + uni(0, 1.5);
+              spo2 -= S ? 5 + uni(0, 2) : 2.3 + uni(0, 1.2);
+              hr += S ? 12 : 6;
               break;
             case 'desaturation':
-              spo2 -= 6 + uni(0, 2.5);
-              resp += 3;
-              hr += 10;
+              spo2 -= S ? 13 + uni(0, 4) : 6 + uni(0, 2.5);
+              resp += S ? 7 : 3;
+              hr += S ? 22 : 10;
               break;
             default:
               break;
@@ -423,7 +445,8 @@ class Generator {
     // Step 1: the true VO2peak on this day = personal baseline, minus the average
     // loss for this phase scaled by the personal responder factor, ±3% day-to-day noise.
     const weight = this.weight * (PHASE_WEIGHT[sp] ?? 1) * uni(0.99, 1.01);
-    const loss = (1 - (PHASE_VO2[sp] ?? 1)) * (AFFECTED_BY_FLIGHT.has(sp) ? this.responder : 1);
+    let loss = (1 - (PHASE_VO2[sp] ?? 1)) * (AFFECTED_BY_FLIGHT.has(sp) ? this.responder : 1);
+    if (this.minLoss && AFFECTED_BY_FLIGHT.has(sp)) loss = Math.max(loss, this.minLoss);
     let vo2peak = this.vo2Base * (1 - loss) * uni(0.97, 1.03);
     if (stopped) vo2peak *= uni(0.8, 0.88);   // stopped before the real maximum was reached
 

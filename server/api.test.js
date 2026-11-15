@@ -8,6 +8,8 @@ import express from 'express';
 import { defaultDbPath, openDb } from './db.js';
 import { createApi } from './api.js';
 import { generate } from './generator.js';
+import { seedOutliers } from './seed-outliers.js';
+import { classify, rangeMap } from '../src/vitals.js';
 
 let dir;
 let db;
@@ -205,5 +207,53 @@ test('psychological questionnaire, journal and cognitive results', async () => {
     assert.equal(db.prepare(`SELECT COUNT(*) n FROM ${t} WHERE crew_id = ?`).get(crewId).n, 0, t);
   }
   assert.equal(db.prepare('SELECT COUNT(*) n FROM psych_answer').get().n, answersBefore - 20);   // 2 × 10 answers
+  assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
+});
+
+test('outlier profiles are visibly unhealthy in their latest data', async () => {
+  // The copied database may already contain outliers: remove them so fresh ones are made.
+  for (const c of (await call('GET', '/crew')).body.filter((p) => p.name.startsWith('Outlier '))) {
+    assert.equal((await call('DELETE', `/crew/${c.id}`)).status, 204);
+  }
+  const created = seedOutliers(db);
+  assert.equal(created.filter((r) => !r.skipped).length, 8);
+  assert.ok(seedOutliers(db).every((r) => r.skipped));         // running again adds nothing
+
+  const list = (await call('GET', '/crew')).body;
+  const byName = (n) => list.find((c) => c.name === `Outlier ${n}`);
+  for (const r of created) assert.ok(byName(r.name), r.name);  // all on the login list
+
+  // Status of each vital sign in the latest reading of a profile.
+  const latest = async (name) => {
+    const d = (await call('GET', `/crew/${byName(name).id}/dashboard`)).body;
+    const ranges = rangeMap(d.ranges);
+    const last = d.vitals.at(-1);
+    const st = (k) => classify(last[k], ranges[k]);
+    return { d, st };
+  };
+
+  let x = await latest('Hypertension (severe)');
+  assert.equal(x.st('systolic_mmhg'), 'critical');
+  x = await latest('Hypotension + Bradycardia');
+  assert.equal(x.st('systolic_mmhg'), 'critical');
+  assert.equal(x.st('heart_rate_bpm'), 'critical');
+  x = await latest('Fever + Tachycardia');
+  assert.equal(x.st('skin_temp_c'), 'critical');
+  assert.equal(x.st('heart_rate_bpm'), 'critical');
+  x = await latest('Low Oxygen (SpO2) + High CO2');
+  assert.equal(x.st('spo2_pct'), 'critical');
+  assert.equal(x.st('resp_rate_bpm'), 'critical');
+  for (const n of ['Fitness Loss + Stopped Test', 'Multi-System Failure']) {
+    x = await latest(n);
+    // The latest comparable test (what the body map uses) is still more than 20% down.
+    const lastFit = [...x.d.tests].reverse().find((t) => t.pct_vs_preflight != null);
+    assert.ok(lastFit.pct_vs_preflight < -20, `${n}: ${lastFit.pct_vs_preflight}`);
+    assert.ok(x.d.tests.some((t) => t.status === 'terminated'), n);
+  }
+  x = await latest('Abnormal ECG (long QTc)');
+  assert.ok(x.d.ecgs.at(-1).abnormal && x.d.ecgs.at(-1).qtc_ms > 460);
+
+  const mood = (await call('GET', `/crew/${byName('Low Mood + Poor Sleep').id}/wellbeing`)).body;
+  assert.ok(mood.assessments.at(-1).percent < 60);
   assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
 });

@@ -21,7 +21,7 @@ z punktami i odznakami oraz proste wyjaśnienia każdego pomiaru.
 3. [Struktura katalogów](#3-struktura-katalogów)
 4. [Jak płyną dane](#4-jak-płyną-dane)
 5. [Baza danych](#5-baza-danych)
-6. [Model fizjologiczny – skąd biorą się liczby](#6-model-fizjologiczny--skąd-biorą-się-liczby)
+6. [Model fizjologiczny – skąd biorą się liczby](#6-model-fizjologiczny--skąd-biorą-się-liczby) (w tym [profile odstające](#66-profile-odstające-outliers))
 7. [Serwer – plik po pliku](#7-serwer--plik-po-pliku)
 8. [Frontend – plik po pliku](#8-frontend--plik-po-pliku)
 9. [Reguły kolorów i progi](#9-reguły-kolorów-i-progi)
@@ -53,6 +53,7 @@ Aplikacja działa pod adresem http://localhost:5173 (API i strona na tym samym p
 | `npm run build` | buduje frontend do katalogu `dist/` |
 | `npm start` | tryb produkcyjny: serwuje `dist/` (wymaga wcześniejszego `npm run build`) |
 | `npm test` | testy API na tymczasowej kopii bazy (prawdziwej nie zmieniają) |
+| `npm run seed:outliers` | dodaje 8 profili demonstracyjnych z poważnymi problemami zdrowotnymi ([rozdz. 6.6](#66-profile-odstające-outliers)) |
 | `python3 database/generate_cardio_db.py` | odtwarza bazę od zera (**kasuje** użytkowników dodanych w aplikacji) |
 
 Zmienne środowiskowe:
@@ -145,6 +146,7 @@ HackatonHealthMonitoringSystem/
 │   ├── api.js                 wszystkie endpointy /api
 │   ├── generator.js           generator fałszywych danych dla nowej osoby
 │   ├── gamification.js        punkty, serie, rangi, odznaki
+│   ├── seed-outliers.js       dodaje profile „Outlier …” z poważnymi problemami
 │   └── api.test.js            testy API (node:test)
 │
 ├── src/                       frontend (React)
@@ -414,6 +416,42 @@ Dwie rzeczy są tu przemyślane:
 
 Wszystko, co zostało zasymulowane, trafia do `simulated_event` z dniami początku i końca.
 
+### 6.6. Profile odstające (outliers)
+
+Losowe profile mają łagodne odchylenia, często widoczne tylko jako żółte kafelki w środku misji.
+Do demonstracji służy osobny zestaw ośmiu profili z **silnymi** problemami. Ich nazwy od razu
+mówią, co jest nie tak:
+
+| Profil na liście logowania | Co pokazuje panel |
+|---|---|
+| Outlier Hypertension (severe) | ciśnienie narastające do ok. 175/105 mmHg (czerwone) |
+| Outlier Hypotension + Bradycardia | ciśnienie poniżej 70/45, tętno poniżej 40 (czerwone) |
+| Outlier Fever + Tachycardia | temperatura skóry ok. 37,5 °C, tętno ponad 130 (czerwone) |
+| Outlier Low Oxygen (SpO2) + High CO2 | SpO₂ ok. 80%, oddechy ponad 25 /min (czerwone) |
+| Outlier Fitness Loss + Stopped Test | VO₂peak ponad 25% poniżej wartości sprzed lotu, przerwany test R+5 (czerwone nogi) |
+| Outlier Abnormal ECG (long QTc) | wydłużony QTc ponad 460 ms w EKG po locie (żółte serce) |
+| Outlier Low Mood + Poor Sleep | kwestionariusz z wynikiem ok. 7% (żółty mózg) |
+| Outlier Multi-System Failure | wszystko naraz: ciśnienie, gorączka, niedotlenienie, wydolność, EKG, nastrój |
+
+```bash
+npm run seed:outliers
+```
+
+Jak to działa:
+
+- `server/seed-outliers.js` wywołuje ten sam generator co formularz, ale z opcją `outlier`.
+  Generator bierze wtedy dokładnie podane odchylenia, w **ostrej** wersji (wartości sięgają
+  zakresu czerwonego), a epizody trwają do ostatniego dnia lotu. Dzięki temu widać je w ostatnim
+  pomiarze, czyli na kafelkach i na sylwetce ciała.
+- Przy silnej utracie wydolności spadek utrzymuje się także po powrocie (test R+30), żeby nogi na
+  sylwetce zostały czerwone.
+- To zwykłe profile z aplikacji (`created_in_app = 1`): są na liście logowania i można je usunąć
+  przyciskiem Delete user. Skrypt można uruchamiać wielokrotnie: profil o istniejącej nazwie
+  jest pomijany.
+- EKG i nastrój mają na sylwetce co najwyżej kolor żółty, bo tak działają ich reguły (rozdz. 9).
+- Test w `server/api.test.js` sprawdza, że każdy profil odstający ma oczekiwane wartości
+  w czerwonym zakresie.
+
 ---
 
 ## 7. Serwer – plik po pliku
@@ -585,8 +623,9 @@ Prawdziwa baza nie jest zmieniana.
 | usuwanie | można usunąć każdy profil, baza zostaje spójna |
 | różnorodność danych | 40 wygenerowanych osób: co najmniej 7 rodzajów odchyleń, alerty pokrywają okna zdarzeń, zdrowe profile mają mało alertów |
 | samopoczucie i testy kognitywne | punktacja, próg, dziennik, walidacja wyników, sprzątanie po usunięciu |
+| profile odstające | 8 profili na liście, ich ostatnie wartości w zakresie czerwonym, brak duplikatów przy ponownym uruchomieniu |
 
-Stan na dziś: **6 z 6 testów przechodzi**. Frontend nie ma testów automatycznych.
+Stan na dziś: **7 z 7 testów przechodzi**. Frontend nie ma testów automatycznych.
 
 ---
 
@@ -754,3 +793,40 @@ Od największego zysku przy najmniejszym nakładzie:
 | **Artefakt** | błędny pomiar spowodowany ruchem, zimnym palcem lub źle założonym czujnikiem |
 | **Załoga referencyjna** | 15 fikcyjnych astronautów ze skryptu Pythona; wzorzec do analiz |
 | **Ground truth** | „prawda” o danych: lista tego, co celowo zasymulowano (`simulated_event`) |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// powody outliersów
+
+On a real mission: each pattern has a few typical explanations. Before treating any of them as illness, check first whether it’s a measurement problem.
+
+Outlier	Possible spaceflight causes	Possible measurement cause
+Hypertension	Stress and workload, poor sleep, high salt in space food, high cabin CO₂, pre-existing high blood pressure	Wrong cuff size, measuring right after exercise, talking during the reading
+Hypotension + Bradycardia	Dehydration (people drink less in space, and fluids shift towards the head), heart and blood vessels deconditioned in weightlessness, medication side effects (e.g. sleep or motion-sickness drugs), very fit athletes with a naturally low heart rate	Reading taken right after waking, sensor misplaced
+Fever + Tachycardia	Infection: the immune system is weaker in space, and dormant viruses (e.g. herpes viruses) can reactivate; dehydration; overheating during exercise or a spacewalk	Skin sensor warmed by exercise or a hot environment
+Low oxygen + High CO₂	Problem with the cabin air (CO₂ scrubber failing, poor airflow in a sleeping area), respiratory infection, fluid in the lungs	Cold fingers or a loose pulse-oximeter clip, the most common cause of a low reading
+Fitness loss + Stopped test	Not enough exercise in flight (equipment failure, schedule pressure, injury), muscle and heart deconditioning, a heart rhythm problem appearing during effort	Effort judged not truly maximal; gas analyser fault
+Abnormal ECG (long QTc)	Low potassium or magnesium (common with fluid shifts and diet in space), medications that lengthen QTc (some anti-nausea drugs, antibiotics, sleep aids), structural heart changes after a long flight	Electrode placement, QTc formula overcorrecting at high heart rates
+Low mood + Poor sleep	Isolation and confinement, no normal day-night cycle (16 sunrises a day on the ISS), noise, workload, conflicts within the crew, distance from family	Questionnaire answered at a bad moment (one low score is not a trend)
+Multi-system failure	Usually one root cause spreading through the body: e.g. a serious infection gives fever, fast breathing and low oxygen, followed by blood pressure changes; or a cabin air failure affecting everything at once	Several sensors failing together is unlikely; a system-wide air problem would show in the whole crew
+
+Three clues help tell real problems from false alarms:
+
+Is the whole crew affected? A low SpO₂ or high CO₂ in several astronauts at the same time points to the cabin air, not to a person. The preloaded HMS-2 mission has exactly this pattern built in.
+Is it one reading or a trend? One absurd value surrounded by normal ones is usually a sensor artifact. The generator simulates these too, as sensor_artifacts.
+Do the parameters move together the way the condition would? Real fever raises skin temperature, heart rate and breathing at once. A high temperature with everything else normal suggests the sensor, not an infection.
+
+This is general background, not medical advice. On a real mission the flight surgeon makes the call.
+
+If you want, I can add a “possible causes” line to each body-map row or to the Guide, so the app explains this to the astronaut directly.

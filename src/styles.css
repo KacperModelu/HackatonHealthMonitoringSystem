@@ -96,8 +96,7 @@ button.danger:not(:disabled) { color: var(--critical); }
 .login-card { width: min(380px, 100%); }
 .form-card { width: min(520px, 100%); }
 .form-card .row { margin-top: 1.2rem; }
-.brand { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.2rem; }
-.brand-mark { color: var(--accent); font-size: 1.4rem; }
+.brand { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.2rem; } s
 .field { display: grid; gap: 0.3rem; font-size: 0.9rem; }
 .field em { font-style: normal; }
 .facts, .events { padding-left: 1.2rem; margin: 0 0 1rem; }

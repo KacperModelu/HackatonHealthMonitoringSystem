@@ -200,10 +200,7 @@ export default function Login({ selected }) {
           margin-bottom: 1.5rem;
         }
 
-        .brand-mark {
-          color: #10b981;
-          font-size: 1.4rem;
-        }
+
 
         .brand h1 {
           font-size: 1.3rem;
@@ -351,7 +348,6 @@ export default function Login({ selected }) {
           transition={{ duration: 0.3, ease: "easeOut" }}
         >
           <div className="brand">
-            <span className="brand-mark" aria-hidden="true">✦</span>
             <h1>Health Monitor</h1>
           </div>
 

@@ -176,10 +176,7 @@ export default function UserForm() {
           margin-bottom: 1.5rem;
         }
 
-        .brand-mark {
-          color: #10b981;
-          font-size: 1.4rem;
-        }
+
 
         .brand h1 {
           font-size: 1.3rem;
@@ -367,7 +364,7 @@ export default function UserForm() {
           {result ? (
             <div>
               <div className="brand">
-                <span className="brand-mark" aria-hidden="true">✦</span>
+                 s
                 <h1 id="done-title">Data generated</h1>
               </div>
               <p className="muted">
@@ -406,7 +403,7 @@ export default function UserForm() {
           ) : (
             <form onSubmit={submit} noValidate>
               <div className="brand">
-                <span className="brand-mark" aria-hidden="true">✦</span>
+                
                 <h1>Health Monitor System</h1>
               </div>
               <span className="muted">All fields are required.</span>

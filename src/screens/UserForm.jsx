@@ -437,11 +437,11 @@ export default function UserForm() {
                 </label>
                 <label className="field">
                   <span>Height <em className="muted" style={{ display: 'inline', margin: 0 }}>(cm)</em></span>
-                  <input {...req('heightCm')} inputMode="decimal" placeholder="120–230" />
+                  <input {...req('heightCm')} inputMode="decimal" placeholder="150–230" />
                 </label>
                 <label className="field">
                   <span>Weight <em className="muted" style={{ display: 'inline', margin: 0 }}>(kg)</em></span>
-                  <input {...req('weightKg')} inputMode="decimal" placeholder="35–200" />
+                  <input {...req('weightKg')} inputMode="decimal" placeholder="40–200" />
                 </label>
               </div>
 

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { api } from '../api.js';
 import { go } from '../router.js';
 
@@ -21,7 +22,7 @@ export default function Login({ selected }) {
 
   useEffect(() => { load(selected); }, [selected]);
 
-  // Płynna animacja EKG z gładkim (płynnym) narastaniem i opadaniem stanu alarmowego
+  // Płynna animacja EKG z gładkim narastaniem i opadaniem stanu alarmowego
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -39,9 +40,8 @@ export default function Login({ selected }) {
 
     let progress = 0;
     let lastTime = performance.now();
-    
-    // Zmienne do płynnego przejścia (interpolacji) stanu szaleństwa
-    let glitchIntensity = 0; // od 0 (norma) do 1 (pełny alarm)
+
+    let glitchIntensity = 0;
     let targetGlitch = 0;
     let glitchTimer = 0;
 
@@ -49,24 +49,20 @@ export default function Login({ selected }) {
       const deltaTime = (currentTime - lastTime) / 1000;
       lastTime = currentTime;
 
-      // Co 6 sekund zmieniamy cel (wchodzimy w stan szaleństwa lub wracamy)
       glitchTimer += deltaTime;
       if (glitchTimer > 6) {
         glitchTimer = 0;
         targetGlitch = targetGlitch === 0 ? 1 : 0;
       }
 
-      // Płynnie dążymy z aktualnej intensywności do docelowej (brak skoków!)
-      const interpSpeed = 1.5; // im mniejsza liczba, tym dłuższe i bardziej płynne przejście
+      const interpSpeed = 1.5;
       glitchIntensity += (targetGlitch - glitchIntensity) * (deltaTime * interpSpeed);
 
-      // Płynnie regulowana prędkość i amplituda
       const speed = 140 + glitchIntensity * 160;
       progress += speed * deltaTime;
 
       ctx.clearRect(0, 0, width, height);
 
-      // Płynne mieszanie kolorów (zielony -> czerwony) w zależności od intensywności
       const r = Math.round(16 + glitchIntensity * (239 - 16));
       const g = Math.round(185 + glitchIntensity * (68 - 185));
       const b = Math.round(129 + glitchIntensity * (68 - 129));
@@ -83,8 +79,6 @@ export default function Login({ selected }) {
       for (let x = 0; x < width; x += 1.5) {
         const waveX = (x + progress) % 550;
         let y = centerY;
-
-        // Płynne skalowanie amplitudy pików oparte na bieżącej intensywności glitcha
         const amp = 1 + glitchIntensity * 1.2;
 
         if (waveX > 120 && waveX < 150) {
@@ -275,6 +269,7 @@ export default function Login({ selected }) {
           color: #9ca3af;
           font-size: 0.85rem;
           margin-bottom: 1.5rem;
+          display: block;
         }
 
         .error {
@@ -291,7 +286,7 @@ export default function Login({ selected }) {
           display: flex;
           flex-direction: column;
           gap: 0.75rem;
-          margin-bottom: 1.5rem;
+          margin-top: 1.5rem;
         }
 
         button {
@@ -348,7 +343,13 @@ export default function Login({ selected }) {
 
         <canvas ref={canvasRef} className="ecg-canvas" />
 
-        <section className="login-card-wrapper">
+        <motion.section 
+          className="login-card-wrapper"
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: -10 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+        >
           <div className="brand">
             <span className="brand-mark" aria-hidden="true">✦</span>
             <h1>Health Monitor</h1>
@@ -364,7 +365,7 @@ export default function Login({ selected }) {
               <span className="select-arrow">▼</span>
             </div>
           </label>
-          
+
           {person && (
             <p className="muted">
               {person.age} years · {person.sex === 'F' ? 'Woman' : 'Man'}
@@ -383,7 +384,7 @@ export default function Login({ selected }) {
               Delete user
             </button>
           </div>
-        </section>
+        </motion.section>
       </div>
     </>
   );

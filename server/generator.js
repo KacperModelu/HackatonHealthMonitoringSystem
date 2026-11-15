@@ -6,8 +6,9 @@
 //     with per-stage HR/VO2/RPE and blood pressure,
 //   * resting ECG before and after flight (MEDB 1.6),
 //   * vitals twice a day during the whole flight.
-// For variety each person randomly gets 0–3 deviations from the norm. What was
-// simulated is stored in simulated_event (source = 'app') as ground truth.
+// Most people get 0–3 deviations from the norm; 20% get a randomly selected severe
+// scenario. Generated daily-task history spans launch through today. Simulated health
+// events are stored in simulated_event (source = 'app') as ground truth.
 import { transaction } from './db.js';
 
 // Schedule point ids (see schedule_point in the database)
@@ -47,6 +48,26 @@ function protocolLoads(light) {
 // The eleven deviations from the norm a generated person can get (see pickEvents).
 const KINDS = ['hypertension', 'hypotension', 'tachycardia', 'bradycardia', 'fever', 'co2',
   'desaturation', 'artifacts', 'deconditioning', 'ecg', 'test_stopped'];
+
+const SEVERE_OUTLIER_CHANCE = 0.2;
+const SEVERE_SCENARIOS = [
+  ['hypertension'],
+  ['hypotension', 'bradycardia'],
+  ['fever', 'tachycardia'],
+  ['desaturation', 'co2'],
+  ['deconditioning', 'test_stopped'],
+];
+
+const TASK_COMPLETION_PROBABILITY = {
+  morning_vitals: 0.92,
+  evening_vitals: 0.7,
+  aerobic: 0.8,
+  resistance: 0.75,
+  hydration: 0.65,
+  sleep: 0.55,
+  wellbeing: 0.6,
+  learn: 0.15,
+};
 
 // --- random helpers ------------------------------------------------------------
 // All randomness goes through one source function, so a test can pass its own `rand`
@@ -106,6 +127,7 @@ class Generator {
     this.p = person;
     this.outlier = outlier ?? null;
     this.r = makeRandom(rand);
+    this.randomSevereOutlier = !outlier && this.r.uni(0, 1) < SEVERE_OUTLIER_CHANCE;
     this.today = today ? toDate(today) : toDate(iso(new Date()));
   }
 
@@ -163,12 +185,15 @@ class Generator {
       [this.crewId, this.missionId, 'Flight Engineer']);
 
     this.pickEvents();
+    const taskCompletions = this.taskHistory();
     const result = {
       crewId: this.crewId,
       mission,
       vitalsReadings: this.vitals(),
       cycleTests: this.cycleTests(),
       ecgs: this.ecgs(),
+      taskCompletions,
+      severeOutlier: this.randomSevereOutlier || !!this.outlier,
       events: [],
     };
 
@@ -193,15 +218,19 @@ class Generator {
   //   this.testStopped R+5 test ends early (used by cycleTests())
   pickEvents() {
     const { uni, randint, shuffle } = this.r;
-    // How many deviations: 20% none (healthy profile), 40% one, 28% two, 12% three.
+    // Ordinary profiles get: 20% none, 40% one, 28% two, 12% three deviations.
     const x = uni(0, 1);
     const count = x < 0.2 ? 0 : x < 0.6 ? 1 : x < 0.88 ? 2 : 3;
     // Shuffle and take the first `count`: no kind is picked twice.
     const pool = shuffle([...KINDS]);
     const d = this.duration;
     // Outlier profile: the requested kinds replace the random choice.
-    const strong = !!this.outlier;
-    const chosen = strong ? this.outlier.kinds.filter((k) => KINDS.includes(k)) : pool.slice(0, count);
+    const strong = !!this.outlier || this.randomSevereOutlier;
+    const chosen = this.outlier
+      ? this.outlier.kinds.filter((k) => KINDS.includes(k))
+      : this.randomSevereOutlier
+        ? SEVERE_SCENARIOS[randint(0, SEVERE_SCENARIOS.length - 1)]
+        : pool.slice(0, count);
     // Random window of minLen–maxLen flight days that fits inside the mission and
     // avoids its first days (when the body is still adapting anyway).
     const span = (minLen, maxLen, earliest = 0.05) => {
@@ -297,6 +326,32 @@ class Generator {
       }
       this.events.push(e);
     }
+  }
+
+  // Synthetic task completions from launch through today, following the reference
+  // crew's per-task rates and lower diligence after returning from the mission.
+  taskHistory() {
+    const tasks = this.db.prepare('SELECT id, code FROM health_task ORDER BY sort_order').all();
+    if (!tasks.length) throw new Error('Cannot generate task history: no health tasks are configured.');
+    const unknown = tasks.find((task) => TASK_COMPLETION_PROBABILITY[task.code] === undefined);
+    if (unknown) throw new Error(`Missing task history probability for "${unknown.code}".`);
+    const diligence = this.r.uni(0.75, 1.1);
+    const insert = this.db.prepare(
+      `INSERT INTO task_completion (crew_id, task_id, completed_on, created_in_app)
+       VALUES (?,?,?,?)`,
+    );
+    let completed = 0;
+    for (let day = new Date(this.launch); day <= this.today; day = addDays(day, 1)) {
+      const factor = day <= this.ret ? diligence : diligence * 0.8;
+      const date = iso(day);
+      for (const task of tasks) {
+        if (this.r.uni(0, 1) < TASK_COMPLETION_PROBABILITY[task.code] * factor) {
+          insert.run(this.crewId, task.id, date, this.r.randint(0, 1));
+          completed++;
+        }
+      }
+    }
+    return completed;
   }
 
   // --- in-flight vitals, collected twice a day -------------------------------------------
@@ -614,10 +669,10 @@ export function validatePerson(body = {}) {
     const v = Number(text(value).replace(',', '.'));
     return Number.isFinite(v) && v >= min && v <= max ? v : null;
   };
-  const heightCm = number(body.heightCm, 120, 230);
-  if (heightCm === null) return { error: 'Height must be in cm (120–230).', fields: ['heightCm'] };
-  const weightKg = number(body.weightKg, 35, 200);
-  if (weightKg === null) return { error: 'Weight must be in kg (35–200).', fields: ['weightKg'] };
+  const heightCm = number(body.heightCm, 150, 230);
+  if (heightCm === null) return { error: 'Height must be in cm (150–230).', fields: ['heightCm'] };
+  const weightKg = number(body.weightKg, 40, 200);
+  if (weightKg === null) return { error: 'Weight must be in kg (40–200).', fields: ['weightKg'] };
 
   return {
     person: { firstName: text(body.firstName), lastName: text(body.lastName), age, sex: body.sex, heightCm, weightKg },

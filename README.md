@@ -207,8 +207,9 @@ sequenceDiagram
     A->>G: generate(db, person)
     G->>D: BEGIN
     G->>D: osoba + misja SIM-xxx
-    G->>G: pickEvents() – 0–3 odchylenia
+    G->>G: pickEvents() – 0–3 odchylenia lub ciężki scenariusz (20%)
     G->>D: ~300–380 pomiarów, 8–9 testów, 2 EKG
+    G->>D: historia zadań od startu misji do dziś
     G->>D: simulated_event („prawda”)
     G->>D: COMMIT
     A-->>F: 201 + podsumowanie
@@ -434,9 +435,10 @@ Wszystko, co zostało zasymulowane, trafia do `simulated_event` z dniami począt
 
 ### 6.6. Profile odstające (outliers)
 
-Losowe profile mają łagodne odchylenia, często widoczne tylko jako żółte kafelki w środku misji.
-Do demonstracji służy osobny zestaw ośmiu profili z **silnymi** problemami. Ich nazwy od razu
-mówią, co jest nie tak:
+80% generowanych profili otrzymuje 0–3 zwykłe odchylenia, często widoczne tylko jako żółte kafelki
+w środku misji. Pozostałe 20% otrzymuje jeden z pięciu losowych scenariuszy z **silnymi**
+problemami. Dodatkowo do demonstracji można utworzyć osiem nazwanych profili odstających.
+Ich nazwy od razu mówią, co jest nie tak:
 
 | Profil na liście logowania | Co pokazuje panel |
 |---|---|
@@ -546,11 +548,13 @@ Klasa `Generator` buduje jedną osobę. Kolejność w `run()` ma znaczenie:
 2. wiersze `crew_member`, `mission`, `crew_assignment`,
 3. `pickEvents()` – wybór odchyleń (jeszcze nic nie zapisuje),
 4. `vitals()`, `cycleTests()`, `ecgs()` – dane już z odchyleniami,
-5. zapis odchyleń do `simulated_event`.
+5. zapis odchyleń do `simulated_event`,
+6. wygenerowanie historii zadań od startu misji do bieżącego dnia.
 
-Cała losowość przechodzi przez `makeRandom(rand)`. Test może podać własne źródło liczb losowych
-i dostać powtarzalne dane. `validatePerson()` sprawdza formularz (wszystkie pola wymagane, wiek
-18–99, wzrost 120–230 cm, waga 35–200 kg) i akceptuje przecinek dziesiętny.
+Historia zadań używa osobnej szansy ukończenia dla każdego rodzaju zadania i obniżonej aktywności
+po powrocie z misji. Cała losowość przechodzi przez `makeRandom(rand)`. Test może podać własne
+źródło liczb losowych i dostać powtarzalne dane. `validatePerson()` sprawdza formularz (wszystkie
+pola wymagane, wiek 18–99, wzrost 150–230 cm, waga 40–200 kg) i akceptuje przecinek dziesiętny.
 
 ### `server/gamification.js` – grywalizacja
 
@@ -589,7 +593,7 @@ ten spada.
 | Plik | Co robi | Na co zwrócić uwagę |
 |---|---|---|
 | `Login.jsx` | lista profili, Log in, Add user, Delete user | lista zawiera tylko profile z aplikacji; usunięcie wymaga potwierdzenia |
-| `UserForm.jsx` | formularz i ekran podsumowania | puste pola sprawdza przeglądarka, zakresy sprawdza serwer i wskazuje pole |
+| `UserForm.jsx` | formularz i ekran podsumowania | podsumowanie pokazuje odchylenia i liczbę wygenerowanych zadań |
 | `Dashboard.jsx` | nagłówek, zakładki, Overview, Vitals, Fitness, ECG | jedno zapytanie na cztery zakładki; wybór misji przeładowuje dane |
 | `BodyMap.jsx` | sylwetka z pięcioma obszarami | kolor to najgorszy stan z przypisanych pomiarów; klik otwiera zakładkę |
 | `Wellbeing.jsx` | kwestionariusz, wykres, dziennik, oddech, medytacja | mała maszyna stanów; licznik oparty na zegarze, nie na liczeniu tyknięć |
@@ -694,8 +698,9 @@ i zachowanie pamięci podręcznej bez połączenia z zewnętrznym serwisem.
 | samopoczucie i testy kognitywne | punktacja, próg, dziennik, walidacja wyników, sprzątanie po usunięciu |
 | profile odstające | 8 profili na liście, ich ostatnie wartości w zakresie czerwonym, brak duplikatów przy ponownym uruchomieniu |
 | dane satelitarne | parsowanie TLE, pamięć podręczna i zwrócenie ostatniej kopii po błędzie CelesTrak |
+| historia zadań i ciężkie scenariusze | zakres historii od startu misji do dziś, losowy wybór ciężkiego scenariusza |
 
-Obecnie `npm test` uruchamia 9 testów. Frontend nie ma testów automatycznych.
+Obecnie `npm test` uruchamia 10 testów. Frontend nie ma testów automatycznych.
 
 ---
 
@@ -810,9 +815,9 @@ i gdzie są ukryte pułapki.
     **naprawione**: tachykardia nakładająca się na bradykardię (−13 uderzeń sprowadzało tętno do
     normy; teraz tachykardia jest stosowana na końcu) oraz zrywane połączenie testowe, gdy
     generowanie 40 osób blokowało serwer dłużej niż 5 sekund.
-23. **Nowy profil zaczyna grywalizację od zera.** Załoga referencyjna ma syntetyczną historię
-    zadań, a profile z aplikacji nie. Każdy nowy użytkownik jest więc Kadetem bez serii, mimo
-    ukończonej półrocznej misji w danych.
+23. **Historia zadań nowego profilu jest syntetyczna.** Generator tworzy losowe ukończenia
+    od startu misji do dziś, z mniejszą aktywnością po powrocie. Wynik grywalizacji nie odtwarza
+    faktycznych zachowań astronauty.
 24. **Pliki `statsscreen.cpp`, `.h`, `.ui`** to pusty szkielet okna dialogowego Qt (C++),
     prawdopodobnie pozostałość po wcześniejszym pomyśle na aplikację desktopową. Nic ich nie używa.
 25. **Dane profilu z aplikacji są „zamrożone”.** Generator tworzy zakończoną misję (powrót 5–6

@@ -83,12 +83,22 @@ test('generate, read dashboard, tick a task, delete', async () => {
   assert.equal(dash.events.length, r.events.length);
   assert.equal(dash.tests.find((t) => t.label === 'L-90/30 d' && t.position === 'upright').pct_vs_preflight, 0);
 
+  const history = db.prepare(
+    'SELECT COUNT(*) AS n FROM task_completion WHERE crew_id = ?',
+  ).get(r.crewId).n;
+  assert.ok(history > 0);
+  assert.equal(history, r.taskCompletions);
+
   const tasks = (await call('GET', `/crew/${r.crewId}/tasks`)).body;
-  assert.equal(tasks.summary.todayPoints, 0);
-  const ticked = (await call('POST', `/crew/${r.crewId}/tasks/${tasks.tasks[0].id}`, { done: true })).body;
-  assert.equal(ticked.summary.todayPoints, tasks.tasks[0].points);
-  assert.deepEqual(ticked.doneToday, [tasks.tasks[0].id]);
-  assert.equal(ticked.summary.currentStreak, 1);
+  const task = tasks.tasks[0];
+  if (tasks.doneToday.includes(task.id)) {
+    await call('POST', `/crew/${r.crewId}/tasks/${task.id}`, { done: false });
+  }
+  const beforeTick = (await call('GET', `/crew/${r.crewId}/tasks`)).body;
+  const ticked = (await call('POST', `/crew/${r.crewId}/tasks/${task.id}`, { done: true })).body;
+  assert.equal(ticked.summary.todayPoints, beforeTick.summary.todayPoints + task.points);
+  assert.ok(ticked.doneToday.includes(task.id));
+  assert.ok(ticked.summary.currentStreak >= 1);
 
   assert.equal((await call('DELETE', `/crew/${r.crewId}`)).status, 204);
   for (const t of ['crew_member WHERE id', 'vitals_reading WHERE crew_id', 'test_session WHERE crew_id',
@@ -97,6 +107,36 @@ test('generate, read dashboard, tick a task, delete', async () => {
   }
   assert.equal(db.prepare('SELECT COUNT(*) n FROM mission WHERE name = ?').get(r.mission).n, 0);
   assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
+});
+
+test('generated task history spans launch through today and severe scenarios are random', () => {
+  const today = '2025-01-31';
+  const person = { firstName: 'History', lastName: 'Test', age: 35, sex: 'F', heightCm: 165, weightKg: 60 };
+  const severe = generate(db, person, { today, rand: () => 0 });
+  assert.equal(severe.severeOutlier, true);
+  assert.ok(severe.events.some((event) => event.text.startsWith('SEVERE – ')));
+
+  const mission = db.prepare('SELECT launch_date FROM mission WHERE name = ?').get(severe.mission);
+  const taskCount = db.prepare('SELECT COUNT(*) AS n FROM health_task').get().n;
+  const history = db.prepare(
+    `SELECT COUNT(*) AS n, COUNT(DISTINCT completed_on) AS days,
+            MIN(completed_on) AS firstDay, MAX(completed_on) AS lastDay
+     FROM task_completion WHERE crew_id = ?`,
+  ).get(severe.crewId);
+  const expectedDays = (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${mission.launch_date}T00:00:00Z`))
+    / 86400000 + 1;
+  assert.equal(history.firstDay, mission.launch_date);
+  assert.equal(history.lastDay, today);
+  assert.equal(history.days, expectedDays);
+  assert.equal(history.n, taskCount * expectedDays);
+  assert.equal(history.n, severe.taskCompletions);
+  assert.deepEqual(db.prepare(
+    'SELECT DISTINCT created_in_app FROM task_completion WHERE crew_id = ?',
+  ).all(severe.crewId).map((row) => row.created_in_app), [0]);
+
+  const usual = generate(db, { ...person, lastName: 'Usual' }, { today, rand: () => 0.5 });
+  assert.equal(usual.severeOutlier, false);
+  assert.ok(!usual.events.some((event) => event.text.startsWith('SEVERE – ')));
 });
 
 test('preloaded crew are hidden and their data is blocked', async () => {

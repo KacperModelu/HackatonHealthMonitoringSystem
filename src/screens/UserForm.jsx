@@ -7,8 +7,8 @@ const LABELS = {
   firstName: 'name', lastName: 'surname', age: 'age', sex: 'biological sex', heightCm: 'height', weightKg: 'weight',
 };
 
-// New user form. "Generate user data" creates the person and a
-// full fake health record with 0–3 random deviations from the norm
+// New user form. Generation includes random health deviations, a 20% chance of
+// a severe outlier scenario, and synthetic task history through the current day.
 export default function UserForm() {
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
@@ -48,7 +48,7 @@ export default function UserForm() {
   };
 
   // After a successful generation the form is replaced by a summary of what was
-  // created, including which deviations from the norm were simulated.
+  // created, including simulated deviations and historical task completions.
   if (result) {
     return (
       <main className="center-screen">
@@ -62,7 +62,11 @@ export default function UserForm() {
             <li><strong>{result.vitalsReadings}</strong> vitals readings (twice a day during a flight)</li>
             <li><strong>{result.cycleTests}</strong> cycle ergometer tests</li>
             <li><strong>{result.ecgs}</strong> resting ECGs</li>
+            <li><strong>{result.taskCompletions}</strong> completed daily tasks in the generated history</li>
           </ul>
+          {result.severeOutlier && (
+            <p className="pill warning">A severe health scenario was randomly generated (20% chance).</p>
+          )}
           {result.events.length === 0 ? (
             <p className="pill ok">No deviations from the norm were simulated (healthy profile).</p>
           ) : (

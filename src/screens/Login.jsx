@@ -78,6 +78,10 @@ export default function Login({ selected }) {
             Delete user
           </button>
         </div>
+
+        <button className="link-button" onClick={() => go('/satellites')}>
+          Satellite visualisation
+        </button>
       </section>
     </main>
   );

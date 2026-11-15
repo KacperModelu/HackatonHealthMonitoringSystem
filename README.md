@@ -8,7 +8,8 @@ musi zauważyć, że coś się z nim dzieje.
 **Health Monitor** to aplikacja, w której astronauta śledzi własne zdrowie: kolorowe oznaczenia
 parametrów życiowych, sylwetka ciała pokazująca, co działa dobrze, wykresy z całej misji, wyniki
 testów wydolności i EKG, kwestionariusz samopoczucia, testy kognitywne, codzienne zadania
-z punktami i odznakami oraz proste wyjaśnienia każdego pomiaru.
+z punktami i odznakami oraz proste wyjaśnienia każdego pomiaru. Zawiera też wizualizację satelitów
+na mapie świata z ich bieżącą pozycją, śladem orbity i podstawowymi danymi orbitalnymi.
 
 > **Ważne:** wszystkie dane osobowe i medyczne w tym projekcie są **syntetyczne** (wymyślone,
 > wygenerowane kodem). Prawdziwe są tylko tabele referencyjne przepisane z dokumentów NASA.
@@ -46,6 +47,7 @@ npm run dev
 ```
 
 Aplikacja działa pod adresem http://localhost:5173 (API i strona na tym samym porcie).
+Do pobierania danych orbitalnych wizualizacja satelitów potrzebuje połączenia z internetem.
 
 | Polecenie | Co robi |
 |---|---|
@@ -85,21 +87,25 @@ Aplikacja ma trzy warstwy i jeden proces:
 ```mermaid
 flowchart LR
     subgraph Przegladarka["Przeglądarka"]
-        UI["React (src/)<br/>ekrany, wykresy, testy kognitywne"]
+        UI["React (src/)<br/>ekrany, wykresy, mapa satelitów"]
     end
     subgraph Node["Jeden proces Node.js (server/)"]
         API["Express: /api/...<br/>api.js"]
         GEN["generator.js<br/>fałszywe dane nowej osoby"]
         GAM["gamification.js<br/>punkty, serie, rangi"]
+        SAT["satellites.js<br/>dane orbitalne i pamięć podręczna"]
         VITE["Vite (tylko dev)<br/>kompiluje JSX, odświeża stronę"]
     end
     DB[("SQLite<br/>database/cardio_analysis.db")]
     PY["generate_cardio_db.py<br/>buduje bazę od zera"]
+    CT["CelesTrak<br/>elementy orbitalne TLE"]
 
     UI -- "fetch JSON" --> API
     UI -. "pliki strony" .-> VITE
     API --> GEN
     API --> GAM
+    API --> SAT
+    SAT --> CT
     API --> DB
     GEN --> DB
     GAM --> DB
@@ -108,7 +114,7 @@ flowchart LR
 
 | Warstwa | Technologia | Dlaczego tak |
 |---|---|---|
-| Frontend | React 18 + Vite, wykresy Recharts | szybki start, odświeżanie na żywo, brak konfiguracji |
+| Frontend | React 18 + Vite, Recharts, d3-geo, topojson-client, world-atlas, satellite.js | wykresy i mapa satelitów obliczana w przeglądarce |
 | Backend | Express 4 | kilkanaście prostych endpointów JSON |
 | Baza | SQLite przez wbudowany `node:sqlite` | jeden plik, zero instalacji, brak natywnych modułów do kompilowania |
 | Dane startowe | skrypt Pythona ze stałym ziarnem losowości | każde uruchomienie skryptu daje te same dane |
@@ -146,8 +152,10 @@ HackatonHealthMonitoringSystem/
 │   ├── api.js                 wszystkie endpointy /api
 │   ├── generator.js           generator fałszywych danych dla nowej osoby
 │   ├── gamification.js        punkty, serie, rangi, odznaki
+│   ├── satellites.js          pobieranie i pamięć podręczna danych orbitalnych z CelesTrak
 │   ├── seed-outliers.js       dodaje profile „Outlier …” z poważnymi problemami
-│   └── api.test.js            testy API (node:test)
+│   ├── api.test.js            testy API (node:test)
+│   └── satellites.test.js     testy danych orbitalnych (node:test)
 │
 ├── src/                       frontend (React)
 │   ├── main.jsx               montuje <App /> w #root
@@ -165,7 +173,8 @@ HackatonHealthMonitoringSystem/
 │       ├── Wellbeing.jsx      kwestionariusz, dziennik, oddech, medytacja
 │       ├── Cognitive.jsx      6 testów kognitywnych
 │       ├── Tasks.jsx          zadania dnia i grywalizacja
-│       └── Guide.jsx          poradnik po wskaźnikach
+│       ├── Guide.jsx          poradnik po wskaźnikach
+│       └── Satellites.jsx     mapa satelitów i bieżące dane orbitalne
 │
 ├── database/
 │   ├── cardio_analysis.db     baza SQLite (w repozytorium)
@@ -218,6 +227,9 @@ Całość działa w jednej transakcji: jeśli cokolwiek się nie uda, w bazie ni
 4. Zakładki Wellbeing, Cognitive, Daily tasks i Guide dociągają swoje dane dopiero po otwarciu.
 5. Sylwetka ciała (`BodyMap.jsx`) korzysta z danych panelu i dociąga tylko wyniki kwestionariusza.
 
+Ekran Satellite tracker pobiera wybraną grupę satelitów z `/api/satellites`; pozycje i ślad orbity
+są obliczane w przeglądarce z elementów orbitalnych TLE.
+
 ### 4.3. Lista endpointów
 
 Wszystkie ścieżki zaczynają się od `/api`. Odpowiedzi to JSON, a błędy mają postać
@@ -237,8 +249,12 @@ Wszystkie ścieżki zaczynają się od `/api`. Odpowiedzi to JSON, a błędy maj
 | `GET /crew/:id/cognitive` | historia testów kognitywnych | 200, 403, 404 |
 | `POST /crew/:id/cognitive` | zapis wyniku jednego testu | 201, 400, 403, 404 |
 | `GET /guide` | tematy poradnika | 200 |
+| `GET /satellites` | dostępne grupy satelitów | 200 |
+| `GET /satellites?group=<kod>` | elementy orbitalne TLE wybranej grupy | 200, 400 (nieznana grupa), 502 |
 
 **403** dotyczy załogi referencyjnej (patrz niżej): jej danych nie da się odczytać przez API.
+Dane satelitarne pochodzą z CelesTrak i są przechowywane w pamięci podręcznej serwera przez
+2 godziny. Jeśli odświeżenie się nie powiedzie, serwer zwraca ostatnią poprawnie pobraną kopię.
 
 ### 4.4. Załoga referencyjna a profile z aplikacji
 
@@ -452,6 +468,36 @@ Jak to działa:
 - Test w `server/api.test.js` sprawdza, że każdy profil odstający ma oczekiwane wartości
   w czerwonym zakresie.
 
+#### Możliwe przyczyny i fałszywe alarmy
+
+Poniższe przykłady pokazują, że podobne objawy mogą mieć różne przyczyny. Przed uznaniem
+nieprawidłowego wyniku za problem zdrowotny należy sprawdzić, czy nie wynika z błędu pomiaru.
+
+| Wzorzec | Możliwe przyczyny w locie kosmicznym | Możliwy błąd pomiaru |
+|---|---|---|
+| Nadciśnienie | stres i obciążenie pracą, niedobór snu, dużo soli w posiłkach, wysokie stężenie CO₂ w kabinie, wcześniejsze nadciśnienie | źle dobrany mankiet, pomiar tuż po wysiłku lub podczas rozmowy |
+| Niskie ciśnienie i bradykardia | odwodnienie, przesunięcie płynów w stanie nieważkości, osłabienie układu krążenia, działanie leków, naturalnie niskie tętno u wytrenowanej osoby | pomiar zaraz po przebudzeniu, źle umieszczony czujnik |
+| Gorączka i tachykardia | infekcja, reaktywacja utajonego wirusa, odwodnienie, przegrzanie podczas ćwiczeń lub spaceru kosmicznego | czujnik skóry ogrzany wysiłkiem lub wysoką temperaturą otoczenia |
+| Niskie SpO₂ i wysokie CO₂ | problem z oczyszczaniem powietrza lub jego przepływem w kabinie, infekcja dróg oddechowych, płyn w płucach | zimne palce albo źle założony pulsoksymetr |
+| Utrata wydolności i przerwany test | zbyt mało ćwiczeń, awaria sprzętu, kontuzja, osłabienie mięśni i serca w stanie nieważkości, zaburzenie rytmu podczas wysiłku | wysiłek nie był maksymalny albo analizator gazów działał nieprawidłowo |
+| Nieprawidłowe EKG (długi QTc) | niski poziom potasu lub magnezu, leki wydłużające QTc, zmiany pracy serca po długim locie | nieprawidłowe umieszczenie elektrod, zawyżona korekta QTc przy wysokim tętnie |
+| Obniżony nastrój i problemy ze snem | izolacja, brak zwykłego rytmu dnia i nocy, hałas, obciążenie pracą, konflikty w załodze, oddalenie od bliskich | odpowiedzi w gorszym momencie; pojedynczy niski wynik nie jest trendem |
+| Problemy wielu układów naraz | jedna poważna przyczyna, np. infekcja lub awaria systemu powietrza w kabinie | jednoczesna awaria wielu czujników jest mało prawdopodobna |
+
+Przy ocenie wyników pomagają trzy wskazówki:
+
+- **Czy problem dotyczy całej załogi?** Niskie SpO₂ lub wysokie CO₂ u kilku osób jednocześnie
+  może wskazywać na problem z powietrzem w kabinie. Taki wzorzec zasymulowano w misji HMS-2.
+- **Czy to pojedynczy pomiar, czy utrzymujący się trend?** Pojedynczy skrajny wynik otoczony
+  prawidłowymi pomiarami częściej wskazuje na artefakt czujnika. Generator symuluje także takie
+  błędy.
+- **Czy parametry zmieniają się w powiązany sposób?** Gorączce zwykle towarzyszy wzrost tętna
+  i częstości oddechów. Sama wysoka temperatura przy prawidłowych pozostałych pomiarach może
+  wskazywać na błąd czujnika.
+
+To ogólne informacje edukacyjne, a nie porada medyczna. W prawdziwej misji ocenę stanu zdrowia
+prowadzi lekarz misji.
+
 ---
 
 ## 7. Serwer – plik po pliku
@@ -485,6 +531,13 @@ tymczasowej kopii. Warto znać cztery miejsca:
 - **`POST /crew/:id/psych`** – serwer sam liczy wynik funkcją `scorePsych` i w jednej transakcji
   zapisuje ocenę, odpowiedzi oraz odhacza zadanie dnia „How do you feel?”.
 
+### `server/satellites.js` – dane orbitalne
+
+Pobiera z CelesTrak elementy orbitalne TLE dla wybranej grupy satelitów. Każda grupa jest
+przechowywana w pamięci procesu przez 2 godziny; jeśli odświeżenie się nie powiedzie, serwer
+zwraca ostatnią poprawnie pobraną kopię. Grupy i elementy orbitalne udostępnia endpoint
+`GET /api/satellites`.
+
 ### `server/generator.js` – generator danych
 
 Klasa `Generator` buduje jedną osobę. Kolejność w `run()` ma znaczenie:
@@ -507,7 +560,7 @@ i dostać powtarzalne dane. `validatePerson()` sprawdza formularz (wszystkie pol
 |---|---|
 | Cel dzienny | 50 punktów |
 | Punkty | suma punktów odhaczonych zadań (wszystkie 8 zadań = 80 punktów dziennie) |
-| Seria (streak) | kolejne dni z co najmniej jednym zadaniem; dzisiejszy brak jej nie przerywa, jeśli wczoraj coś było |
+| Seria | kolejne dni z co najmniej jednym zadaniem; dzisiejszy brak jej nie przerywa, jeśli wczoraj coś było |
 | Ranga | punkty z ostatnich 30 dni: Cadet 0, Specialist 300, Pilot 700, Flight Engineer 1100, Commander 1500, Space Ace 1900 |
 | Odznaki | 7 sztuk: pierwszy krok, seria 7 i 30 dni, 30 porannych pomiarów, 50 treningów, 8 tematów poradnika, dzień idealny |
 
@@ -522,8 +575,9 @@ ten spada.
 
 - **`main.jsx`** montuje `<App />`.
 - **`App.jsx`** to router na `#` w adresie: `#/` (logowanie), `#/new` (formularz),
-  `#/crew/<id>` (panel). Część adresu po `#` nie trafia do serwera, więc nie trzeba tras po stronie
-  Expressa, a przycisk Wstecz i odświeżenie strony działają same.
+  `#/crew/<id>` (panel), `#/satellites` (wizualizacja satelitów). Część adresu po `#` nie trafia
+  do serwera, więc nie trzeba tras po stronie Expressa, a przycisk Wstecz i odświeżenie strony
+  działają same.
 - **`api.js`** to cienka nakładka na `fetch`. Przy błędzie rzuca wyjątek z komunikatem serwera,
   który ekrany pokazują bez zmian.
 - **`vitals.js`** zawiera listę sześciu parametrów i funkcję `classify()` (reguła kolorów).
@@ -542,6 +596,20 @@ ten spada.
 | `Cognitive.jsx` | 6 testów kognitywnych | pomiar czasu `performance.now()`; wynik liczy przeglądarka |
 | `Tasks.jsx` | zadania, punkty, seria, ranga, odznaki | po każdym kliknięciu serwer odsyła całe przeliczone podsumowanie |
 | `Guide.jsx` | poradnik rozwijany tematami | treść pochodzi z tabeli `indicator_guide` |
+| `Satellites.jsx` | mapa świata, ślad orbity, pozycja i dane wybranego satelity | pozycje z TLE oblicza w przeglądarce model SGP4; ekran odświeża je co sekundę |
+
+### Wizualizacja satelitów (`Satellites.jsx`)
+
+Przycisk „Satellite visualisation” na ekranie logowania otwiera `#/satellites`. Ekran udostępnia
+grupy stacji kosmicznych, najjaśniejszych satelitów, meteorologicznych, GPS, Galileo, naukowych,
+geostacjonarnych i Starlink. Kliknięcie obiektu na mapie wybiera go i pokazuje jego szerokość oraz
+długość geograficzną, wysokość, prędkość, okres orbitalny i numer NORAD. Mapa oznacza też stronę
+nocną Ziemi i punkt, nad którym znajduje się Słońce.
+
+`server/satellites.js` pobiera elementy orbitalne TLE z CelesTrak i współdzieli pamięć podręczną
+przez dwie godziny; jeśli odświeżenie się nie powiedzie, serwer zwraca ostatnią poprawną kopię.
+`Satellites.jsx` wyznacza pozycje w przeglądarce z użyciem modelu SGP4 (`satellite.js`) i rysuje
+mapę oraz ślad orbity na elemencie canvas.
 
 ### Sylwetka ciała (`BodyMap.jsx`)
 
@@ -613,7 +681,8 @@ npm test
 
 Plik `server/api.test.js` (wbudowany `node:test`, bez dodatkowych bibliotek) kopiuje bazę do
 katalogu tymczasowego, uruchamia na niej prawdziwe API na losowym porcie i wysyła zapytania HTTP.
-Prawdziwa baza nie jest zmieniana.
+Prawdziwa baza nie jest zmieniana. `server/satellites.test.js` sprawdza parsowanie danych TLE
+i zachowanie pamięci podręcznej bez połączenia z zewnętrznym serwisem.
 
 | Test | Co sprawdza |
 |---|---|
@@ -624,8 +693,9 @@ Prawdziwa baza nie jest zmieniana.
 | różnorodność danych | 40 wygenerowanych osób: co najmniej 7 rodzajów odchyleń, alerty pokrywają okna zdarzeń, zdrowe profile mają mało alertów |
 | samopoczucie i testy kognitywne | punktacja, próg, dziennik, walidacja wyników, sprzątanie po usunięciu |
 | profile odstające | 8 profili na liście, ich ostatnie wartości w zakresie czerwonym, brak duplikatów przy ponownym uruchomieniu |
+| dane satelitarne | parsowanie TLE, pamięć podręczna i zwrócenie ostatniej kopii po błędzie CelesTrak |
 
-Stan na dziś: **7 z 7 testów przechodzi**. Frontend nie ma testów automatycznych.
+Obecnie `npm test` uruchamia 9 testów. Frontend nie ma testów automatycznych.
 
 ---
 
@@ -642,7 +712,7 @@ i gdzie są ukryte pułapki.
 2. **`simulated_event` to wbudowany klucz odpowiedzi.** Rzadko spotykane w projektach
    hackathonowych: można policzyć, ile zasymulowanych zdarzeń analiza wykryła i ile alertów było
    fałszywych.
-3. **Mało ruchomych części.** Jeden proces, jeden port, jeden plik bazy, cztery zależności
+3. **Mało ruchomych części.** Jeden proces, jeden port, jeden plik bazy, osiem zależności
    produkcyjne. Projekt da się uruchomić w minutę.
 4. **Wynik kwestionariusza liczy serwer** wspólną funkcją, więc nie da się go sfałszować.
 5. **Transakcje tam, gdzie trzeba.** Generowanie profilu, usuwanie i zapis kwestionariusza są
@@ -792,41 +862,4 @@ Od największego zysku przy najmniejszym nakładzie:
 | **PVC** | przedwczesne pobudzenie komorowe, „dodatkowe uderzenie” serca |
 | **Artefakt** | błędny pomiar spowodowany ruchem, zimnym palcem lub źle założonym czujnikiem |
 | **Załoga referencyjna** | 15 fikcyjnych astronautów ze skryptu Pythona; wzorzec do analiz |
-| **Ground truth** | „prawda” o danych: lista tego, co celowo zasymulowano (`simulated_event`) |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// powody outliersów
-
-On a real mission: each pattern has a few typical explanations. Before treating any of them as illness, check first whether it’s a measurement problem.
-
-Outlier	Possible spaceflight causes	Possible measurement cause
-Hypertension	Stress and workload, poor sleep, high salt in space food, high cabin CO₂, pre-existing high blood pressure	Wrong cuff size, measuring right after exercise, talking during the reading
-Hypotension + Bradycardia	Dehydration (people drink less in space, and fluids shift towards the head), heart and blood vessels deconditioned in weightlessness, medication side effects (e.g. sleep or motion-sickness drugs), very fit athletes with a naturally low heart rate	Reading taken right after waking, sensor misplaced
-Fever + Tachycardia	Infection: the immune system is weaker in space, and dormant viruses (e.g. herpes viruses) can reactivate; dehydration; overheating during exercise or a spacewalk	Skin sensor warmed by exercise or a hot environment
-Low oxygen + High CO₂	Problem with the cabin air (CO₂ scrubber failing, poor airflow in a sleeping area), respiratory infection, fluid in the lungs	Cold fingers or a loose pulse-oximeter clip, the most common cause of a low reading
-Fitness loss + Stopped test	Not enough exercise in flight (equipment failure, schedule pressure, injury), muscle and heart deconditioning, a heart rhythm problem appearing during effort	Effort judged not truly maximal; gas analyser fault
-Abnormal ECG (long QTc)	Low potassium or magnesium (common with fluid shifts and diet in space), medications that lengthen QTc (some anti-nausea drugs, antibiotics, sleep aids), structural heart changes after a long flight	Electrode placement, QTc formula overcorrecting at high heart rates
-Low mood + Poor sleep	Isolation and confinement, no normal day-night cycle (16 sunrises a day on the ISS), noise, workload, conflicts within the crew, distance from family	Questionnaire answered at a bad moment (one low score is not a trend)
-Multi-system failure	Usually one root cause spreading through the body: e.g. a serious infection gives fever, fast breathing and low oxygen, followed by blood pressure changes; or a cabin air failure affecting everything at once	Several sensors failing together is unlikely; a system-wide air problem would show in the whole crew
-
-Three clues help tell real problems from false alarms:
-
-Is the whole crew affected? A low SpO₂ or high CO₂ in several astronauts at the same time points to the cabin air, not to a person. The preloaded HMS-2 mission has exactly this pattern built in.
-Is it one reading or a trend? One absurd value surrounded by normal ones is usually a sensor artifact. The generator simulates these too, as sensor_artifacts.
-Do the parameters move together the way the condition would? Real fever raises skin temperature, heart rate and breathing at once. A high temperature with everything else normal suggests the sensor, not an infection.
-
-This is general background, not medical advice. On a real mission the flight surgeon makes the call.
-
-If you want, I can add a “possible causes” line to each body-map row or to the Guide, so the app explains this to the astronaut directly.
+| **Dane referencyjne zdarzeń (ground truth)** | lista tego, co celowo zasymulowano (`simulated_event`) |

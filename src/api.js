@@ -28,4 +28,6 @@ export const api = {
   saveJournal: (id, text) => request('POST', `/crew/${id}/journal`, { text }),
   cognitive: (id) => request('GET', `/crew/${id}/cognitive`),
   saveCognitive: (id, result) => request('POST', `/crew/${id}/cognitive`, result),
+  satelliteGroups: () => request('GET', '/satellites'),
+  satellites: (group) => request('GET', `/satellites?group=${encodeURIComponent(group)}`),
 };

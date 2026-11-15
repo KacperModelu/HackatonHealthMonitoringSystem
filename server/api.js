@@ -3,6 +3,7 @@ import express from 'express';
 import { plain, transaction } from './db.js';
 import { generate, validatePerson } from './generator.js';
 import { computeSummary, localToday } from './gamification.js';
+import { SATELLITE_GROUPS, getGroup } from './satellites.js';
 import { COGNITIVE_TESTS, PSYCH_THRESHOLD, scorePsych, testByCode } from '../src/assessments.js';
 
 // Current time as an ISO string in UTC, cut to whole seconds: 2026-11-15T10:42:07Z
@@ -337,6 +338,19 @@ export function createApi(db) {
   api.get('/guide', (_req, res) => {
     const rows = plain(db.prepare('SELECT * FROM indicator_guide ORDER BY sort_order').all());
     res.json(rows.map((r) => ({ ...r, how_to_measure: r.how_to_measure.split('|') })));
+  });
+
+  // Satellite orbital elements from CelesTrak (cached, see satellites.js).
+  // Without ?group the list of available groups is returned.
+  api.get('/satellites', async (req, res) => {
+    const code = req.query.group;
+    if (!code) return res.json({ groups: SATELLITE_GROUPS });
+    if (!SATELLITE_GROUPS.some((g) => g.code === code)) return res.status(400).json({ error: 'Unknown satellite group.' });
+    try {
+      res.json(await getGroup(code));
+    } catch (e) {
+      res.status(502).json({ error: e.message });
+    }
   });
 
   // Last resort: any error thrown in a route above ends up here as a JSON 500

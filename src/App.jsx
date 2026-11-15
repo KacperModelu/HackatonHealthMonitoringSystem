@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import Login from './screens/Login.jsx';
 import UserForm from './screens/UserForm.jsx';
 import Dashboard from './screens/Dashboard.jsx';
+import Satellites from './screens/Satellites.jsx';
 
-// Tiny hash router: #/ (login), #/new (add user), #/crew/<id> (dashboard).
+// Tiny hash router: #/ (login), #/new (add user), #/crew/<id> (dashboard),
+// #/satellites (satellite map).
 // The part of the URL after "#" never reaches the server, so the server needs no
 // route for each screen and the browser's Back button and page reload just work.
 // "#/?selected=<id>" returns to the login screen with that person preselected.
@@ -11,6 +13,7 @@ function parse(hash) {
   const m = hash.match(/^#\/crew\/(\d+)/);
   if (m) return { screen: 'dashboard', crewId: Number(m[1]) };
   if (hash.startsWith('#/new')) return { screen: 'form' };
+  if (hash.startsWith('#/satellites')) return { screen: 'satellites' };
   const sel = hash.match(/[?&]selected=(\d+)/);
   return { screen: 'login', selected: sel ? Number(sel[1]) : null };
 }
@@ -26,6 +29,7 @@ export default function App() {
   }, []);
 
   if (route.screen === 'form') return <UserForm />;
+  if (route.screen === 'satellites') return <Satellites />;
   // key={crewId}: switching to another person builds a fresh Dashboard, so no state
   // (open tab, loaded data) is carried over from the previous one.
   if (route.screen === 'dashboard') return <Dashboard key={route.crewId} crewId={route.crewId} />;

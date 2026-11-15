@@ -45,15 +45,13 @@ export default function Tasks({ crewId }) {
         </div>
         <div className="card stat">
           <span className="stat-label">Streak</span>
-          <span className="stat-value">🔥 {s.currentStreak} <small>days (best {s.bestStreak})</small></span>
+          <span className="stat-value">{s.currentStreak} <small>days (best {s.bestStreak})</small></span>
         </div>
         <div className="card stat">
           <span className="stat-label">Rank</span>
           <span className="stat-value">{s.rank.name}</span>
-          <div className="bar"><div style={{ width: `${rankPct}%` }} /></div>
           <span className="muted small">
-            {s.rank.monthPoints} pts in 30 days
-            {s.rank.nextName ? ` · ${s.rank.nextPoints - s.rank.monthPoints} to ${s.rank.nextName}` : ' · top rank'}
+
           </span>
         </div>
         <div className="card stat">

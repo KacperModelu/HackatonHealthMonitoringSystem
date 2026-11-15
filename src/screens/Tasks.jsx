@@ -67,7 +67,7 @@ export default function Tasks({ crewId }) {
         </div>
       </div>
 
-      <div className="grid3">x
+      <div className="grid3">
         <section className="card">
           <h2>Today's tasks <span className="muted small">{s.today}</span></h2>
           <ul className="tasks">

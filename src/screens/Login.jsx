@@ -21,7 +21,7 @@ export default function Login({ selected }) {
 
   useEffect(() => { load(selected); }, [selected]);
 
-  // Płynna animacja EKG z okresowym „szaleństwem” (czerwony alarm)
+  // Płynna animacja EKG z gładkim (płynnym) narastaniem i opadaniem stanu alarmowego
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -38,47 +38,65 @@ export default function Login({ selected }) {
     window.addEventListener('resize', handleResize);
 
     let progress = 0;
-    let isGlitching = false;
+    let lastTime = performance.now();
+    
+    // Zmienne do płynnego przejścia (interpolacji) stanu szaleństwa
+    let glitchIntensity = 0; // od 0 (norma) do 1 (pełny alarm)
+    let targetGlitch = 0;
+    let glitchTimer = 0;
 
-    // Co 5 sekund włączamy „szaleństwo” na 1.5 sekundy
-    const glitchInterval = setInterval(() => {
-      isGlitching = true;
-      setTimeout(() => {
-        isGlitching = false;
-      }, 1500);
-    }, 5000);
+    const render = (currentTime) => {
+      const deltaTime = (currentTime - lastTime) / 1000;
+      lastTime = currentTime;
 
-    const render = () => {
-      // W trakcie szaleństwa linia przyspiesza
-      progress += isGlitching ? 6 : 2;
+      // Co 6 sekund zmieniamy cel (wchodzimy w stan szaleństwa lub wracamy)
+      glitchTimer += deltaTime;
+      if (glitchTimer > 6) {
+        glitchTimer = 0;
+        targetGlitch = targetGlitch === 0 ? 1 : 0;
+      }
+
+      // Płynnie dążymy z aktualnej intensywności do docelowej (brak skoków!)
+      const interpSpeed = 1.5; // im mniejsza liczba, tym dłuższe i bardziej płynne przejście
+      glitchIntensity += (targetGlitch - glitchIntensity) * (deltaTime * interpSpeed);
+
+      // Płynnie regulowana prędkość i amplituda
+      const speed = 140 + glitchIntensity * 160;
+      progress += speed * deltaTime;
+
       ctx.clearRect(0, 0, width, height);
 
-      // Kolory i parametry zmieniają się podczas alertu
-      ctx.strokeStyle = isGlitching ? 'rgba(239, 68, 68, 0.45)' : 'rgba(16, 185, 129, 0.28)';
-      ctx.lineWidth = isGlitching ? 3 : 2.5;
-      ctx.shadowBlur = isGlitching ? 15 : 10;
-      ctx.shadowColor = isGlitching ? '#ef4444' : '#10b981';
+      // Płynne mieszanie kolorów (zielony -> czerwony) w zależności od intensywności
+      const r = Math.round(16 + glitchIntensity * (239 - 16));
+      const g = Math.round(185 + glitchIntensity * (68 - 185));
+      const b = Math.round(129 + glitchIntensity * (68 - 129));
+      const alpha = 0.28 + glitchIntensity * 0.2;
+
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      ctx.lineWidth = 2.5 + glitchIntensity * 1.0;
+      ctx.shadowBlur = 10 + glitchIntensity * 10;
+      ctx.shadowColor = glitchIntensity > 0.5 ? '#ef4444' : '#10b981';
 
       ctx.beginPath();
       const centerY = height / 2;
 
       for (let x = 0; x < width; x += 1.5) {
-        const waveX = (x + progress) % 500;
+        const waveX = (x + progress) % 550;
         let y = centerY;
 
-        // Podczas szaleństwa piki stają się gwałtowne i wysokie
-        const amplitudeFactor = isGlitching ? 2.2 : 1;
+        // Płynne skalowanie amplitudy pików oparte na bieżącej intensywności glitcha
+        const amp = 1 + glitchIntensity * 1.2;
 
         if (waveX > 120 && waveX < 150) {
-          y -= Math.sin(((waveX - 120) / 30) * Math.PI) * (30 * amplitudeFactor);
+          y -= Math.sin(((waveX - 120) / 30) * Math.PI) * (30 * amp);
         } else if (waveX >= 180 && waveX <= 195) {
-          y += 20 * amplitudeFactor;
+          y += 20 * amp;
         } else if (waveX > 195 && waveX < 210) {
-          y -= (isGlitching ? 220 : 120); // Ogromny pik QRS podczas anomalii
+          y -= (120 + glitchIntensity * 110);
         } else if (waveX >= 210 && waveX <= 225) {
-          y += 45 * amplitudeFactor;
-        } else if (waveX > 280 && waveX < 330) {
-          y -= Math.sin(((waveX - 280) / 50) * Math.PI) * (35 * amplitudeFactor);
+          y += 45 * amp;
+        } else if (waveX > 280 && waveX < 340) {
+          y -= Math.sin(((waveX - 280) / 60) * Math.PI) * (35 * amp);
         }
 
         if (x === 0) ctx.moveTo(x, y);
@@ -89,12 +107,11 @@ export default function Login({ selected }) {
       animationFrameId = requestAnimationFrame(render);
     };
 
-    render();
+    animationFrameId = requestAnimationFrame(render);
 
     return () => {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
-      clearInterval(glitchInterval);
     };
   }, []);
 
@@ -145,7 +162,6 @@ export default function Login({ selected }) {
           pointer-events: none;
         }
 
-        /* Przycisk satelitów w prawym górnym rogu */
         .top-right-satellites {
           position: absolute;
           top: 1.75rem;

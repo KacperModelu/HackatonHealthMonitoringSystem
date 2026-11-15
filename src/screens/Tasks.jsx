@@ -67,7 +67,7 @@ export default function Tasks({ crewId }) {
         </div>
       </div>
 
-      <div className="grid2 gap-lg">
+      <div className="grid2">
         <section className="card">
           <h2>Today's tasks <span className="muted small">{s.today}</span></h2>
           <ul className="tasks">
@@ -87,21 +87,6 @@ export default function Tasks({ crewId }) {
                 </li>
               );
             })}
-          </ul>
-        </section>
-        <section className="card">
-          <h2>Badges</h2>
-          <ul className="badges">
-            {s.badges.map((b) => (
-              <li key={b.title} className={b.earned ? 'earned' : ''}>
-                <span className="badge-icon" aria-hidden="true">{b.icon}</span>
-                <span>
-                  <strong>{b.title}</strong>
-                  <span className="muted small block">{b.description}</span>
-                </span>
-                <span className="small">{b.earned ? '✓' : b.progress}</span>
-              </li>
-            ))}
           </ul>
         </section>
       </div>

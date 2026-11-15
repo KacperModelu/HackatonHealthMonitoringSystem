@@ -50,6 +50,7 @@ export default function Tasks({ crewId }) {
         <div className="card stat">
           <span className="stat-label">Rank</span>
           <span className="stat-value">{s.rank.name}</span>
+
           <span className="muted small">
 
           </span>

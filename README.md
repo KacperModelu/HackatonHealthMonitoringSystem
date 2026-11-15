@@ -114,7 +114,8 @@ flowchart LR
 
 | Warstwa | Technologia | Dlaczego tak |
 |---|---|---|
-| Frontend | React 18 + Vite, Recharts, d3-geo, topojson-client, world-atlas, satellite.js | wykresy i mapa satelitów obliczana w przeglądarce |
+| Frontend | React 18 + Vite, Recharts | szybkie odświeżanie w trakcie pracy, gotowe wykresy |
+| Mapa satelitów | satellite.js, d3-geo, topojson-client, world-atlas | orbity liczone w przeglądarce, kontury lądów bez plików graficznych |
 | Backend | Express 4 | kilkanaście prostych endpointów JSON |
 | Baza | SQLite przez wbudowany `node:sqlite` | jeden plik, zero instalacji, brak natywnych modułów do kompilowania |
 | Dane startowe | skrypt Pythona ze stałym ziarnem losowości | każde uruchomienie skryptu daje te same dane |
@@ -145,6 +146,7 @@ HackatonHealthMonitoringSystem/
 ├── index.html                 strona-wydmuszka: <div id="root"> + src/main.jsx
 ├── package.json               skrypty npm i zależności
 ├── vite.config.js             Vite z wtyczką React
+├── .cache/celestrak/          kopie danych satelitarnych (tworzone samo, poza gitem)
 │
 ├── server/                    backend (Node.js)
 │   ├── index.js               punkt startu: Express + Vite (dev) albo dist/ (produkcja)
@@ -255,7 +257,8 @@ Wszystkie ścieżki zaczynają się od `/api`. Odpowiedzi to JSON, a błędy maj
 
 **403** dotyczy załogi referencyjnej (patrz niżej): jej danych nie da się odczytać przez API.
 Dane satelitarne pochodzą z CelesTrak i są przechowywane w pamięci podręcznej serwera przez
-2 godziny. Jeśli odświeżenie się nie powiedzie, serwer zwraca ostatnią poprawnie pobraną kopię.
+2 godziny (także na dysku, w `.cache/celestrak/`). Jeśli odświeżenie się nie powiedzie, serwer
+zwraca ostatnią poprawnie pobraną kopię z polem `"stale": true`.
 
 ### 4.4. Załoga referencyjna a profile z aplikacji
 
@@ -535,10 +538,19 @@ tymczasowej kopii. Warto znać cztery miejsca:
 
 ### `server/satellites.js` – dane orbitalne
 
-Pobiera z CelesTrak elementy orbitalne TLE dla wybranej grupy satelitów. Każda grupa jest
-przechowywana w pamięci procesu przez 2 godziny; jeśli odświeżenie się nie powiedzie, serwer
-zwraca ostatnią poprawnie pobraną kopię. Grupy i elementy orbitalne udostępnia endpoint
-`GET /api/satellites`.
+Pobiera z CelesTrak elementy orbitalne TLE dla wybranej grupy satelitów i udostępnia je przez
+`GET /api/satellites`. Ważne szczegóły:
+
+- **Lista dozwolonych grup** (`SATELLITE_GROUPS`). Nieznany kod daje 400, więc przez serwer nie da
+  się wysłać do CelesTrak dowolnego zapytania.
+- **Pamięć podręczna na 2 godziny**, w pamięci procesu i w plikach `.cache/celestrak/<grupa>.json`
+  (katalog jest w `.gitignore`). CelesTrak aktualizuje dane co ok. 2 godziny i **odmawia**
+  ponownego pobrania tej samej grupy w tym czasie. Bez kopii na dysku każdy restart serwera
+  oznaczałby nawet 2 godziny bez danych.
+- **Ostatnia dobra kopia.** Gdy odświeżenie się nie uda (brak sieci, odmowa CelesTrak), serwer
+  zwraca poprzednie dane z `stale: true`, a ekran wyświetla o tym informację.
+- **`parseTle()`** czyta format trzyliniowy (nazwa, linia 1, linia 2) i pomija wszystko inne, np.
+  tekstowe komunikaty błędów, które CelesTrak wysyła z kodem 200.
 
 ### `server/generator.js` – generator danych
 
@@ -552,9 +564,10 @@ Klasa `Generator` buduje jedną osobę. Kolejność w `run()` ma znaczenie:
 6. wygenerowanie historii zadań od startu misji do bieżącego dnia.
 
 Historia zadań używa osobnej szansy ukończenia dla każdego rodzaju zadania i obniżonej aktywności
-po powrocie z misji. Cała losowość przechodzi przez `makeRandom(rand)`. Test może podać własne
-źródło liczb losowych i dostać powtarzalne dane. `validatePerson()` sprawdza formularz (wszystkie
-pola wymagane, wiek 18–99, wzrost 150–230 cm, waga 40–200 kg) i akceptuje przecinek dziesiętny.
+po powrocie z misji. Dla każdego wpisu `task_completion.created_in_app` losowana jest wartość
+`0` lub `1`. Cała losowość przechodzi przez `makeRandom(rand)`. Test może podać własne źródło
+liczb losowych i dostać powtarzalne dane. `validatePerson()` sprawdza formularz (wszystkie pola
+wymagane, wiek 18–99, wzrost 150–230 cm, waga 40–200 kg) i akceptuje przecinek dziesiętny.
 
 ### `server/gamification.js` – grywalizacja
 
@@ -592,7 +605,7 @@ ten spada.
 
 | Plik | Co robi | Na co zwrócić uwagę |
 |---|---|---|
-| `Login.jsx` | lista profili, Log in, Add user, Delete user | lista zawiera tylko profile z aplikacji; usunięcie wymaga potwierdzenia |
+| `Login.jsx` | lista profili, Log in, Add user, Delete user, Satellite visualisation | lista zawiera tylko profile z aplikacji; usunięcie wymaga potwierdzenia |
 | `UserForm.jsx` | formularz i ekran podsumowania | podsumowanie pokazuje odchylenia i liczbę wygenerowanych zadań |
 | `Dashboard.jsx` | nagłówek, zakładki, Overview, Vitals, Fitness, ECG | jedno zapytanie na cztery zakładki; wybór misji przeładowuje dane |
 | `BodyMap.jsx` | sylwetka z pięcioma obszarami | kolor to najgorszy stan z przypisanych pomiarów; klik otwiera zakładkę |
@@ -604,16 +617,37 @@ ten spada.
 
 ### Wizualizacja satelitów (`Satellites.jsx`)
 
-Przycisk „Satellite visualisation” na ekranie logowania otwiera `#/satellites`. Ekran udostępnia
-grupy stacji kosmicznych, najjaśniejszych satelitów, meteorologicznych, GPS, Galileo, naukowych,
-geostacjonarnych i Starlink. Kliknięcie obiektu na mapie wybiera go i pokazuje jego szerokość oraz
-długość geograficzną, wysokość, prędkość, okres orbitalny i numer NORAD. Mapa oznacza też stronę
-nocną Ziemi i punkt, nad którym znajduje się Słońce.
+Przycisk „Satellite visualisation” na ekranie logowania otwiera `#/satellites`; do ekranu nie
+trzeba wybierać profilu. Dostępne grupy (kody CelesTrak w nawiasach):
 
-`server/satellites.js` pobiera elementy orbitalne TLE z CelesTrak i współdzieli pamięć podręczną
-przez dwie godziny; jeśli odświeżenie się nie powiedzie, serwer zwraca ostatnią poprawną kopię.
-`Satellites.jsx` wyznacza pozycje w przeglądarce z użyciem modelu SGP4 (`satellite.js`) i rysuje
-mapę oraz ślad orbity na elemencie canvas.
+| Grupa | Kod | Liczba obiektów (orientacyjnie) |
+|---|---|---|
+| Space stations | `stations` | kilkanaście (domyślna, z wybraną ISS) |
+| Brightest | `visual` | ok. 150 najjaśniejszych, widocznych gołym okiem |
+| Weather | `weather` | ok. 70 |
+| GPS | `gps-ops` | ok. 30 |
+| Galileo | `galileo` | ok. 30 |
+| Science | `science` | ok. 45 |
+| Geostationary | `geo` | ok. 560 |
+| Starlink | `starlink` | ponad 10 tysięcy |
+
+Jak działa ekran:
+
+1. Po wyborze grupy przeglądarka pobiera `GET /api/satellites?group=<kod>`, czyli listę TLE
+   (nazwa + dwie linie elementów orbitalnych na każdy obiekt).
+2. `satellite.js` zamienia każdy TLE na model orbity (`twoline2satrec`), a co sekundę model SGP4
+   wylicza bieżącą pozycję, wysokość i prędkość.
+3. Mapa to płaskie odwzorowanie walcowe (długość geograficzna → x, szerokość → y) rysowane na
+   elemencie `<canvas>`. Kontury lądów pochodzą z `world-atlas`, a `d3-geo` przycina wielokąty
+   przechodzące przez linię zmiany daty.
+4. Wybrany satelita (kliknięcie kropki albo pole „Find satellite”) dostaje ślad orbity: jedno
+   okrążenie wstecz (blado) i jedno do przodu. Pod mapą widać jego szerokość i długość
+   geograficzną, wysokość, prędkość, okres orbitalny i numer NORAD.
+5. Zacieniony obszar to nocna strona Ziemi, a żółta kropka to punkt, nad którym Słońce jest
+   w zenicie (przybliżony wzór astronomiczny, dokładność ok. 0,01°).
+
+Przy grupach liczących tysiące obiektów kropki są mniejsze (na wąskim ekranie jeszcze mniejsze),
+żeby mapa pozostała czytelna.
 
 ### Sylwetka ciała (`BodyMap.jsx`)
 
@@ -642,8 +676,8 @@ a prawa strona to lustrzane odbicie.
 ### Kwestionariusz samopoczucia
 
 10 pytań, każde do 10 punktów (maksimum to 99, bo jedno pytanie daje najwyżej 9). Suwaki mają
-skalę 0–10. Część jest odwrócona (wysoki stres to mało
-punktów). Pytania wyboru mają punkty przypisane do odpowiedzi. Wynik poniżej **60%** pokazuje
+skalę 0–10. Część jest odwrócona (wysoki stres to mało punktów). Pytania wyboru mają punkty
+przypisane do odpowiedzi. Wynik poniżej **60%** pokazuje
 zalecenie kontaktu z zespołem wsparcia i proponuje aktywności: dziennik, ćwiczenie oddechowe
 (3 minuty, cykl 4 s wdech, 4 s zatrzymanie, 6 s wydech, 2 s pauza) i medytację (5 minut).
 
@@ -686,7 +720,7 @@ npm test
 Plik `server/api.test.js` (wbudowany `node:test`, bez dodatkowych bibliotek) kopiuje bazę do
 katalogu tymczasowego, uruchamia na niej prawdziwe API na losowym porcie i wysyła zapytania HTTP.
 Prawdziwa baza nie jest zmieniana. `server/satellites.test.js` sprawdza parsowanie danych TLE
-i zachowanie pamięci podręcznej bez połączenia z zewnętrznym serwisem.
+i zachowanie pamięci podręcznej (także zapisu na dysk) bez połączenia z zewnętrznym serwisem.
 
 | Test | Co sprawdza |
 |---|---|
@@ -697,10 +731,10 @@ i zachowanie pamięci podręcznej bez połączenia z zewnętrznym serwisem.
 | różnorodność danych | 40 wygenerowanych osób: co najmniej 7 rodzajów odchyleń, alerty pokrywają okna zdarzeń, zdrowe profile mają mało alertów |
 | samopoczucie i testy kognitywne | punktacja, próg, dziennik, walidacja wyników, sprzątanie po usunięciu |
 | profile odstające | 8 profili na liście, ich ostatnie wartości w zakresie czerwonym, brak duplikatów przy ponownym uruchomieniu |
-| dane satelitarne | parsowanie TLE, pamięć podręczna i zwrócenie ostatniej kopii po błędzie CelesTrak |
+| dane satelitarne | parsowanie TLE, pamięć podręczna, ostatnia kopia po błędzie CelesTrak, kopia na dysku po restarcie |
 | historia zadań i ciężkie scenariusze | zakres historii od startu misji do dziś, losowy wybór ciężkiego scenariusza |
 
-Obecnie `npm test` uruchamia 10 testów. Frontend nie ma testów automatycznych.
+Obecnie `npm test` uruchamia 11 testów. Frontend nie ma testów automatycznych.
 
 ---
 
@@ -718,7 +752,7 @@ i gdzie są ukryte pułapki.
    hackathonowych: można policzyć, ile zasymulowanych zdarzeń analiza wykryła i ile alertów było
    fałszywych.
 3. **Mało ruchomych części.** Jeden proces, jeden port, jeden plik bazy, osiem zależności
-   produkcyjne. Projekt da się uruchomić w minutę.
+   produkcyjnych (połowa to biblioteki mapy satelitów). Projekt da się uruchomić w minutę.
 4. **Wynik kwestionariusza liczy serwer** wspólną funkcją, więc nie da się go sfałszować.
 5. **Transakcje tam, gdzie trzeba.** Generowanie profilu, usuwanie i zapis kwestionariusza są
    atomowe.
@@ -817,12 +851,25 @@ i gdzie są ukryte pułapki.
     generowanie 40 osób blokowało serwer dłużej niż 5 sekund.
 23. **Historia zadań nowego profilu jest syntetyczna.** Generator tworzy losowe ukończenia
     od startu misji do dziś, z mniejszą aktywnością po powrocie. Wynik grywalizacji nie odtwarza
-    faktycznych zachowań astronauty.
+    faktycznych zachowań astronauty. Kolumna `task_completion.created_in_app` jest przy tym
+    losowana (`0` lub `1`), więc nie pozwala odróżnić wpisów wygenerowanych od kliknięć
+    użytkownika.
 24. **Pliki `statsscreen.cpp`, `.h`, `.ui`** to pusty szkielet okna dialogowego Qt (C++),
     prawdopodobnie pozostałość po wcześniejszym pomyśle na aplikację desktopową. Nic ich nie używa.
 25. **Dane profilu z aplikacji są „zamrożone”.** Generator tworzy zakończoną misję (powrót 5–6
     tygodni temu). Nowe pomiary życiowe nie napływają; rosną tylko zadania, kwestionariusze
     i testy kognitywne.
+
+**Mapa satelitów**
+
+26. **Zależność od zewnętrznego serwisu.** Bez internetu (albo gdy CelesTrak jest niedostępny)
+    pierwsze otwarcie grupy kończy się błędem 502. Później serwer korzysta z kopii zapisanej na
+    dysku, ale jeśli jest starsza niż 2 godziny, pozycje są liczone ze starszych elementów
+    orbitalnych.
+27. **Pozycje są przybliżone.** SGP4 z danymi TLE ma błąd rzędu kilometrów, rosnący z wiekiem
+    danych. Do wizualizacji to wystarcza, do planowania manewrów nie.
+28. **Funkcja jest niezależna od reszty.** Mapa nie korzysta z bazy ani z profilu astronauty, np.
+    nie pokazuje, na której stacji leci wybrana osoba.
 
 ---
 
@@ -867,4 +914,9 @@ Od największego zysku przy najmniejszym nakładzie:
 | **PVC** | przedwczesne pobudzenie komorowe, „dodatkowe uderzenie” serca |
 | **Artefakt** | błędny pomiar spowodowany ruchem, zimnym palcem lub źle założonym czujnikiem |
 | **Załoga referencyjna** | 15 fikcyjnych astronautów ze skryptu Pythona; wzorzec do analiz |
+| **CelesTrak** | publiczny serwis z aktualnymi elementami orbitalnymi satelitów |
+| **TLE** | Two-Line Element set: nazwa i dwie linie tekstu opisujące orbitę satelity w danej chwili |
+| **SGP4** | standardowy model obliczania pozycji satelity z danych TLE |
+| **NORAD ID** | numer katalogowy obiektu na orbicie (ISS ma 25544) |
+| **Terminator** | granica dnia i nocy na powierzchni Ziemi |
 | **Dane referencyjne zdarzeń (ground truth)** | lista tego, co celowo zasymulowano (`simulated_event`) |

@@ -139,6 +139,8 @@ p.pill { margin: 0 0 0.5rem; padding: 0.35rem 0.7rem; border-radius: 8px; }
 .tile-value small { font-size: 0.8rem; font-weight: 400; }
 .tile-status { font-weight: 600; font-size: 0.85rem; }
 .tile-foot { font-size: 0.78rem; color: var(--muted); }
+.task-reminder { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.task-reminder p { margin: 0; }
 
 /* --- body map ------------------------------------------------------------ */
 .body-card { display: grid; grid-template-columns: minmax(140px, 220px) 1fr; gap: 1.2rem; align-items: center; }

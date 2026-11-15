@@ -103,12 +103,20 @@ export default function Dashboard({ crewId }) {
 // latest reading, and short fitness / ECG summaries. Tiles and body parts are buttons
 // that open the tab with the details.
 function Overview({ data, mission, openTab }) {
+  const [taskData, setTaskData] = useState(null);
+  const [taskError, setTaskError] = useState('');
   const ranges = rangeMap(data.ranges);
   const last = data.vitals.at(-1);                  // latest in-flight reading (rows are sorted by time)
   // Counting alerts walks every reading of the mission; useMemo repeats it only when the data changes.
   const alerts = useMemo(() => countAlerts(data.vitals, ranges), [data.vitals]);
   const lastTest = [...data.tests].reverse().find((t) => t.vo2peak_ml_kg_min);   // latest test that measured VO2
   const abnormalEcg = data.ecgs.filter((e) => e.abnormal);
+
+  useEffect(() => {
+    api.tasks(data.crew.id).then(setTaskData).catch((e) => setTaskError(e.message));
+  }, [data.crew.id]);
+
+  const pendingTasks = taskData?.tasks.filter((task) => !taskData.doneToday.includes(task.id)) ?? [];
 
   return (
     <>
@@ -119,6 +127,16 @@ function Overview({ data, mission, openTab }) {
         </p>
       ) : (
         <p className="muted">No mission yet: only annual fitness tests are available.</p>
+      )}
+
+      {taskError && <p className="error" role="alert">Could not load today's tasks: {taskError}</p>}
+      {pendingTasks.length > 0 && (
+        <section className="card task-reminder warning" role="status" aria-live="polite">
+          <p>
+            You have {pendingTasks.length} daily task{pendingTasks.length === 1 ? '' : 's'} left to complete today.
+          </p>
+          <button onClick={() => openTab('Daily tasks')}>Review today's tasks</button>
+        </section>
       )}
 
       <BodyMap data={data} crewId={data.crew.id} openTab={openTab} />
